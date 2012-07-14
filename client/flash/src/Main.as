@@ -1,5 +1,6 @@
 package 
 {
+	import control.MainController;
 	import flash.display.Sprite;
 	import flash.events.Event;
 
@@ -20,7 +21,7 @@ package
 		private function init(e:Event = null):void 
 		{
 			removeEventListener(Event.ADDED_TO_STAGE, init);
-			// entry point
+			new MainController(this);
 		}
 
 	}
