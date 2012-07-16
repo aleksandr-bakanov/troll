@@ -4,7 +4,7 @@
 C_LOGIN = 2
 
 # Для парсинга данных пользуемся struct
-from struct import *
+from bc import *
 
 # Поиграемся с MySQL
 import MySQLdb
@@ -36,13 +36,12 @@ def run (socket):
 			break
 		# Сохраним пришедший кусок сообщения
 		data += chunk
-		print data
 		# Если нам еще не известна длина сообщения, пытаемся прочитать ее
 		if not commandLen:
 			# Смотрим есть ли хотя бы 4 байта для прочтения длины сообщения
 			if len(chunk) >= 4:
 				# Читаем длину сообщения
-				commandLen = unpack('l', chunk[0:4])[0]
+				commandLen = getInt(chunk, 0)
 				# Если сообщение пришло целиком, отправляемся на парсинг
 				if len(data) - 4 >= commandLen:
 					break
@@ -59,19 +58,16 @@ def run (socket):
 
 	# Вот тут у нас в data есть полная команда. Начнем ее парсить.
 	# Если это не C_LOGIN убиваем это еретическое соединение!
-	commandId = unpack('h', data[4:6])[0]
+	commandId = getShort(data, 4)
 	if commandId != C_LOGIN:
 		socket.close()
 		return
 	# Иначе радостно считываем логин и пароль
 	else:
-		pos = 8;
-		utfSize = unpack('h', data[6:pos])[0]
-		login = unpack( str(utfSize) + 's', data[pos:pos+utfSize])[0]
-		pos += utfSize
-		utfSize = unpack('h', data[pos:pos+2])[0]
-		pos += 2
-		password = unpack( str(utfSize) + 's', data[pos:pos+utfSize])[0]
+		pos = 6;
+		login = getUTF(data, pos)
+		pos += 2 + len(login)
+		password = getUTF(data, pos)
 		print 'Client!', login, password
 	
 	"""
