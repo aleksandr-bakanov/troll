@@ -126,7 +126,7 @@ package control
 		private function connectHandler(e:Event):void 
 		{
 			Debug.out("Connection established.");
-			var login:String = "abc";
+			var login:String = "a";
 			var password:String = "c4ca4238a0b923820dcc509a6f75849b";
 			var comLen:int = 2 + 2 + login.length + 2 + password.length;
 			_socket.writeInt(comLen);

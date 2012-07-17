@@ -25,5 +25,14 @@ def getChar (data, pos):
 
 # return UTF-string
 def getUTF (data, pos):
-	sl = getShort(data, pos)
-	return unpack(str(sl) + 's', data[pos+2:pos+2+sl])[0]
+	# Проверим можно ли считать длину строки
+	sl = 0
+	if len(data) - pos >= 2:
+		sl = getShort(data, pos)
+	else:
+		return -1
+	# Проверим теперь хватает ли данных чтобы считать строку
+	if len(data) - pos - 2 >= sl:
+		return unpack(str(sl) + 's', data[pos+2:pos+2+sl])[0]
+	else:
+		return -1
