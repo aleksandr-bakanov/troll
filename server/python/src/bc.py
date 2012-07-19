@@ -20,7 +20,7 @@ def getInt (data, pos):
 	return unpack('i', data[pos:pos+4])[0]
 
 # return float
-def getChar (data, pos):
+def getFloat (data, pos):
 	return unpack('f', data[pos:pos+4])[0]
 
 # return UTF-string

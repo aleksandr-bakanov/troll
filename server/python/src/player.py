@@ -10,6 +10,8 @@ from struct import *
 import MySQLdb
 # Поиграемся с JSON
 import json
+# Регулярные выражения
+import re
 
 class Player:
 	def __init__(self, id, name, params, socket, db):
@@ -47,7 +49,8 @@ class Player:
 			else:
 				continue
 		# Уходя, обновляем is_playing в базе и закрываем с ней соединение
-		self.db.query("UPDATE user SET is_playing=0 WHERE id=" + str(self.id))
+		self.db.query("UPDATE user SET is_playing=0, params='" +
+			json.dumps(self.params) + "' WHERE id=" + str(self.id))
 		print 'Player "' + self.name + '" is gone.'
 	
 	# Функция возвращает количество обработанных байт
@@ -124,6 +127,7 @@ def run (socket):
 				# Если сообщение пришло целиком, отправляемся на парсинг
 				if len(data) - INT_SIZE >= commandLen:
 					result = parse(data, socket, db)
+					print 'parse result = ', result
 					if result < 0:
 						break
 			# Иначе, ждем еще байтов
@@ -151,10 +155,16 @@ def parse(data, socket, db):
 		login = getUTF(data, pos)
 		if login < 0:
 			return -1
+		utfLogin = login.decode('utf-8')
+		if len(utfLogin) > 16:
+			return -9
 		pos += 2 + len(login)
 		password = getUTF(data, pos)
 		if password < 0:
-			return -1
+			return -2
+		utfPassword = password.decode('utf-8')
+		if len(utfPassword) != 32:
+			return -10
 		# Окей, есть логин и пароль. Проверим существует ли такой
 		# игрок и не играет ли он уже.
 		cursor = db.cursor()
@@ -165,13 +175,13 @@ def parse(data, socket, db):
 		# в базе данных нет.
 		if not rc:
 			socket.sendall(pack('ihb', 3, S_WRONG_LOGIN, 1))
-			return 0
+			return 3
 		# Достаем данные
 		data = cursor.fetchall()[0]
 		# Если кто-то уже играет под этим логином, уходим
 		if data[1] == 1:
 			socket.sendall(pack('ihb', 3, S_WRONG_LOGIN, 2))
-			return 0
+			return 4
 		# А если нет, отмечаем что данный логин уже занят
 		cursor.execute("UPDATE user SET is_playing=1 WHERE id=" + str(data[0]))
 		db.commit()
@@ -186,22 +196,35 @@ def parse(data, socket, db):
 		pos = 6
 		login = getUTF(data, pos)
 		if login < 0:
-			return -1
-		elif len(login) > 16:
-			return -1
+			return -3
+		utfLogin = login.decode('utf-8')
+		if len(utfLogin) > 16:
+			return -4
+		# Проверяем свободен ли логин
 		cursor = db.cursor()
 		cursor.execute("SELECT id FROM user WHERE login='" + login + "'")
 		if cursor.rowcount > 0:
+			cursor.close()
 			socket.sendall(pack('ihb', 3, S_REGISTER_FAILURE, 1))
-			return 0
+			return 5
 		cursor.close()
+		# Проверим логин регуляркой
+		## TODO: повнимательней отнестить к регулярному выражению
+		# Черная магия!
+		res = re.findall(u'[a-zA-Zа-яА-ЯЁё]+[a-zA-Zа-яА-Я0-9Ёё]*', login, re.U)
+		if res == None or (len(res) > 0 and len(login) != len(res[0])):
+			socket.sendall(pack('ihb', 3, S_REGISTER_FAILURE, 2))
+			return 6
+		# Конец черной магии
 		pos += 2 + len(login)
 		password = getUTF(data, pos)
 		if password < 0:
-			return -1
-		elif len(password) != 32:
-			return -1
+			return -5
+		utfPassword = password.decode('utf-8')
+		if len(utfPassword) != 32:
+			return -6
 		pos += 2 + len(password)
+		# Вычитываем статы персонажа
 		strength = getChar(data, pos)
 		pos += 1
 		dexterity = getChar(data, pos)
@@ -209,14 +232,39 @@ def parse(data, socket, db):
 		intellect = getChar(data, pos)
 		pos += 1
 		health = getChar(data, pos)
+		# Проверяем присланные данные
 		if strength < 10 or dexterity < 10 or intellect < 10 or health < 10:
-			return -1
+			return -7
 		usedOP = (strength - 10) * 10
 		usedOP += (dexterity - 10) * 20
 		usedOP += (intellect - 10) * 20
 		usedOP += (health - 10) * 10
 		if usedOP > 50:
-			return -1
-		params = {}
+			return -8
+		speed = (dexterity + health) / 4.0
+		params = { "strength":strength, "dexterity":dexterity,
+			"intellect":intellect, "health":health, "usedOP":usedOP,
+			"unusedOP":50 - usedOP,
+			"speed":speed,
+			"hitPoints":health,
+			"deviation":int(speed) + 3,
+			"maxLoad":int((strength * strength) / 5.0)
+			}
+		# Создаем запись в базе данных
+		cursor = db.cursor()
+		cursor.execute("INSERT INTO user (id, login, password, is_playing, params)" +
+			"VALUES (NULL, '" + login + "', '" + password + "', '1', '" + json.dumps(params) + "')")
+		db.commit()
+		# Вытаскиваем id игрока
+		cursor.execute("SELECT id FROM user WHERE login='" + login + "'")
+		data = cursor.fetchall()[0]
+		cursor.close()
+		# Отсылаем сообщение об успешной авторизации
+		socket.sendall(pack('ih', 2, S_REGISTER_SUCCESS))
+		# Создаем объект Player и передаем ему данные
+		player = Player(data[0], login, json.dumps(params), socket, db)
+		# Запускаем обработку данных игроком
+		player.run()
+		return -1
 	else:
 		return 0

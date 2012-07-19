@@ -6,16 +6,18 @@ package view.menu
 	import flash.events.MouseEvent;
 	
 	/**
-	 * ...
+	 * Окно создания аккаунта
 	 * @author bav
 	 */
 	public class RegistrationWindow extends Sprite 
 	{
+		public static const LOGIN_REGEXP:RegExp = /[a-zA-Zа-яА-ЯЁё]+[a-zA-Zа-яА-Я0-9Ёё]*/;
 		public var module:RegistrationWindow_asset;
 		
 		public function RegistrationWindow() 
 		{
 			module = new RegistrationWindow_asset();
+			module.login.restrict = "0-9a-zA-Zа-яА-ЯЁё";
 			addChild(module);
 			configureHandlers();
 		}
@@ -32,7 +34,10 @@ package view.menu
 		
 		private function registerClickHandler(e:MouseEvent):void 
 		{
-			if (module.login.text && module.password1.text && module.password2.text &&
+			var match:Array = module.login.text.match(LOGIN_REGEXP);
+			if (!match.length || match[0].length != module.login.text.length)
+				return;
+			if (module.password1.text && module.password2.text &&
 				module.login.text.length <= 16 && module.password1.length <= 16 &&
 				module.password1.text == module.password2.text)
 			{

@@ -18,6 +18,8 @@ package control
 		// Server side
 		public static const S_TRACE:int = 1;
 		public static const S_WRONG_LOGIN:int = 3;
+		public static const S_REGISTER_SUCCESS:int = 5;
+		public static const S_REGISTER_FAILURE:int = 7;
 		// Client side
 		public static const C_LOGIN:int = 2;
 		public static const C_REGISTER:int = 4;
@@ -40,8 +42,8 @@ package control
 
 		private function configureHandlers():void 
 		{
-			Dispatcher.instance.addEventListener(UserEvent.SEND_LOGIN, sLogin);
-			Dispatcher.instance.addEventListener(UserEvent.SEND_REGISTER, sRegister);
+			Dispatcher.instance.addEventListener(UserEvent.SEND_LOGIN, cLogin);
+			Dispatcher.instance.addEventListener(UserEvent.SEND_REGISTER, cRegister);
 		}
 
 		private function configureSocket():void
@@ -115,6 +117,7 @@ package control
 			{
 				case S_TRACE: sTrace(); break;
 				case S_WRONG_LOGIN: sWrongLogin(); break;
+				case S_REGISTER_FAILURE: sRegisterFailure(); break;
 				default: break;
 			}
 			_lastComSize = 0;
@@ -140,6 +143,15 @@ package control
 				Debug.out("Кто-то уже играет под этим ником.");
 			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.WRONG_LOGIN));
 		}
+		
+		private function sRegisterFailure():void 
+		{
+			var reason:int = _socket.readByte();
+			if (reason == 1)
+				Debug.out("Логин уже занят.");
+			else
+				Debug.out("Логин не прошел проверки регулярным выражением.");
+		}
 
 
 		//=============================================================
@@ -148,7 +160,7 @@ package control
 		//
 		//=============================================================
 
-		private function sLogin(e:UserEvent):void 
+		private function cLogin(e:UserEvent):void 
 		{
 			var ba:ByteArray = new ByteArray();
 			ba.endian = Endian.LITTLE_ENDIAN;
@@ -159,11 +171,11 @@ package control
 			flushByteArray(ba);
 		}
 
-		private function sRegister(e:UserEvent):void 
+		private function cRegister(e:UserEvent):void 
 		{
 			var ba:ByteArray = new ByteArray();
 			ba.endian = Endian.LITTLE_ENDIAN;
-			ba.writeShort(C_LOGIN);
+			ba.writeShort(C_REGISTER);
 			ba.writeUTF(e.data.login);
 			var md5:String = MD5.hash(e.data.password);
 			ba.writeUTF(md5);
