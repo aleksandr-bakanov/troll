@@ -31,6 +31,8 @@ def getUTF (data, pos):
 		sl = getShort(data, pos)
 	else:
 		return -1
+	if sl <= 0:
+		return -1
 	# Проверим теперь хватает ли данных чтобы считать строку
 	if len(data) - pos - 2 >= sl:
 		return unpack(str(sl) + 's', data[pos+2:pos+2+sl])[0]

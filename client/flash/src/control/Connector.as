@@ -1,5 +1,6 @@
 package control 
 {
+	import by.blooddy.crypto.MD5;
 	import flash.events.*;
 	import flash.net.*;
 	import flash.utils.*;
@@ -13,6 +14,14 @@ package control
 	 */
 	public class Connector extends EventDispatcher 
 	{
+		// Константы команд
+		// Server side
+		public static const S_TRACE:int = 1;
+		public static const S_WRONG_LOGIN:int = 3;
+		// Client side
+		public static const C_LOGIN:int = 2;
+		public static const C_REGISTER:int = 4;
+		
 		private var _socket:Socket;
 		private var _lastComSize:int;
 		private var _model:MainModel;
@@ -31,7 +40,8 @@ package control
 
 		private function configureHandlers():void 
 		{
-			
+			Dispatcher.instance.addEventListener(UserEvent.SEND_LOGIN, sLogin);
+			Dispatcher.instance.addEventListener(UserEvent.SEND_REGISTER, sRegister);
 		}
 
 		private function configureSocket():void
@@ -62,8 +72,8 @@ package control
 				if (!_lastComSize)
 				{
 					// Читаем размер в том случае если можем его прочитать.
-					if (_socket.bytesAvailable >= 2)
-						_lastComSize = _socket.readShort();
+					if (_socket.bytesAvailable >= 4)
+						_lastComSize = _socket.readInt();
 					// Если не можем, уходим из цикла и из функции,
 					// до прихода следующих данных.
 					else
@@ -103,11 +113,73 @@ package control
 			var comId:int = _socket.readShort();
 			switch(comId)
 			{
+				case S_TRACE: sTrace(); break;
+				case S_WRONG_LOGIN: sWrongLogin(); break;
 				default: break;
 			}
 			_lastComSize = 0;
 		}
+		
+		//=============================================================
+		//
+		//	Функции-обработчики серверных команд
+		//
+		//=============================================================
+		
+		private function sTrace():void
+		{
+			Debug.out(_socket.readUTF());
+		}
+		
+		private function sWrongLogin():void
+		{
+			var reason:int = _socket.readByte();
+			if (reason == 1)
+				Debug.out("Неверный логин или пароль.");
+			else
+				Debug.out("Кто-то уже играет под этим ником.");
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.WRONG_LOGIN));
+		}
 
+
+		//=============================================================
+		//
+		//	Функции, отправляющие команды клиента
+		//
+		//=============================================================
+
+		private function sLogin(e:UserEvent):void 
+		{
+			var ba:ByteArray = new ByteArray();
+			ba.endian = Endian.LITTLE_ENDIAN;
+			ba.writeShort(C_LOGIN);
+			ba.writeUTF(e.data.login);
+			var md5:String = MD5.hash(e.data.password);
+			ba.writeUTF(md5);
+			flushByteArray(ba);
+		}
+
+		private function sRegister(e:UserEvent):void 
+		{
+			var ba:ByteArray = new ByteArray();
+			ba.endian = Endian.LITTLE_ENDIAN;
+			ba.writeShort(C_LOGIN);
+			ba.writeUTF(e.data.login);
+			var md5:String = MD5.hash(e.data.password);
+			ba.writeUTF(md5);
+			ba.writeByte(_model.params.strength);
+			ba.writeByte(_model.params.dexterity);
+			ba.writeByte(_model.params.intellect);
+			ba.writeByte(_model.params.health);
+			flushByteArray(ba);
+		}
+
+		//=============================================================
+		//
+		//	Обработчики разнообразных событий сокета
+		//
+		//=============================================================
+		
 		private function securityErrorHandler(e:SecurityErrorEvent):void 
 		{
 			Debug.out(e.toString());
@@ -126,13 +198,18 @@ package control
 		private function connectHandler(e:Event):void 
 		{
 			Debug.out("Connection established.");
-			var login:String = "a";
-			var password:String = "c4ca4238a0b923820dcc509a6f75849b";
-			var comLen:int = 2 + 2 + login.length + 2 + password.length;
-			_socket.writeInt(comLen);
-			_socket.writeShort(2);
-			_socket.writeUTF(login);
-			_socket.writeUTF(password);
+		}
+		
+		//=============================================================
+		//
+		//	Util functions
+		//
+		//=============================================================
+		
+		private function flushByteArray(ba:ByteArray):void
+		{
+			_socket.writeInt(ba.length);
+			_socket.writeBytes(ba);
 			_socket.flush();
 		}
 
