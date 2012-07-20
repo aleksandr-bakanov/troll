@@ -12,8 +12,10 @@ package control
 		public static const WRONG_LOGIN:String = "wrong_login";
 		public static const SHOW_WINDOW:String = "show_window";
 		public static const PARAM_CHANGED:String = "param_changed";
-		public static const PARAM_UPDATED:String = "param_updated";
+		public static const PARAMS_UPDATED:String = "params_updated";
 		public static const SEND_REGISTER:String = "send_register";
+		public static const SEND_ITEM_INFO_REQUEST:String = "send_item_info_request";
+		public static const INIT_BACKPACK:String = "init_backpack";
 		
 		public var data:Object;
 		

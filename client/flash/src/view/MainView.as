@@ -6,7 +6,10 @@ package view
 	import flash.display.Sprite;
 	import flash.events.Event;
 	import model.MainModel;
+	import view.menu.BackpackWindow;
+	import view.menu.LevelUpWindow;
 	import view.menu.LoginWindow;
+	import view.menu.MainWindow;
 	import view.menu.RegistrationWindow;
 	
 	/**
@@ -17,11 +20,17 @@ package view
 	{
 		public static const LOGIN_WINDOW:String = "login_window";
 		public static const REGISTRATION_WINDOW:String = "registration_window";
+		public static const MAIN_WINDOW:String = "main_window";
+		public static const LEVEL_UP_WINDOW:String = "level_up_window";
+		public static const BACKPACK_WINDOW:String = "backpack_window";
 
 		private var _model:MainModel;
 		private var _windows:Object;
 		private var _loginWindow:LoginWindow;
 		private var _registrationWindow:RegistrationWindow;
+		private var _mainWindow:MainWindow;
+		private var _leveUpWindow:LevelUpWindow;
+		private var _backpackWindow:BackpackWindow;
 
 		public function MainView(model:MainModel, host:DisplayObjectContainer) 
 		{
@@ -66,6 +75,12 @@ package view
 			addChild(_loginWindow);
 			_registrationWindow = new RegistrationWindow();
 			_windows[REGISTRATION_WINDOW] = _registrationWindow;
+			_mainWindow = new MainWindow();
+			_windows[MAIN_WINDOW] = _mainWindow;
+			_leveUpWindow = new LevelUpWindow();
+			_windows[LEVEL_UP_WINDOW] = _leveUpWindow;
+			_backpackWindow = new BackpackWindow();
+			_windows[BACKPACK_WINDOW] = _backpackWindow;
 			resizeHandler();
 		}
 		

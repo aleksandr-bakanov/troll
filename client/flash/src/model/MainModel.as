@@ -3,17 +3,22 @@ package model
 	import by.blooddy.crypto.serialization.JSON;
 	import control.Dispatcher;
 	import control.UserEvent;
-	import flash.events.EventDispatcher;
 	import view.common.Debug;
 	
 	/**
 	 * Main application model
 	 * @author bav
 	 */
-	public class MainModel extends EventDispatcher 
+	public class MainModel
 	{
+		public static const TOTAL_ENERGY:Number = 100;
+		
+		public var id:int;
+		public var name:String;
 		public var params:Object;
 		private var _oldParams:Object;
+		
+		public static const items:Object = { };
 
 		public function MainModel() 
 		{
@@ -59,7 +64,7 @@ package model
 			if (changed)
 			{
 				calculateParams();
-				Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.PARAM_UPDATED, params));
+				Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.PARAMS_UPDATED, params));
 			}
 		}
 		

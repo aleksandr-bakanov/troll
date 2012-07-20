@@ -28,7 +28,7 @@ package view.menu
 				"minus_intellect", "plus_intellect", "minus_health", "plus_health"];
 			for (var i:int = 0; i < names.length; i++)
 				module.getChildByName(names[i]).addEventListener(MouseEvent.CLICK, paramChange);
-			Dispatcher.instance.addEventListener(UserEvent.PARAM_UPDATED, paramUpdated);
+			Dispatcher.instance.addEventListener(UserEvent.PARAMS_UPDATED, paramsUpdated);
 			module.register.addEventListener(MouseEvent.CLICK, registerClickHandler);
 		}
 		
@@ -47,7 +47,7 @@ package view.menu
 			}
 		}
 		
-		private function paramUpdated(e:UserEvent):void 
+		private function paramsUpdated(e:UserEvent):void 
 		{
 			module.rest.text = e.data.unusedOP.toString();
 			module.strength.text = e.data.strength.toString();

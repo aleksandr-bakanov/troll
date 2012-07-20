@@ -20,11 +20,16 @@ class Player:
 		self.params = json.loads(params)
 		self.socket = socket
 		self.db = db
+		self.cursor = db.cursor()
 
 	# Функция запускает цикл в ожидании команд от клиента.
 	# После прихода очередной команды запускает parse.
 	def run(self):
 		print 'Player "' + self.name + '" now run.'
+		# Отправляем S_LOGIN_SUCCESS
+		self.sLoginSuccess()
+		# Отправляем параметры персонажа
+		self.sFullParams()
 		# Начинаем парсить данные приходящие от клиента
 		data = ''
 		commandLen = 0
@@ -49,8 +54,10 @@ class Player:
 			else:
 				continue
 		# Уходя, обновляем is_playing в базе и закрываем с ней соединение
-		self.db.query("UPDATE user SET is_playing=0, params='" +
+		self.cursor.execute("UPDATE user SET is_playing=0, params='" +
 			json.dumps(self.params) + "' WHERE id=" + str(self.id))
+		self.db.commit()
+		self.cursor.close()
 		print 'Player "' + self.name + '" is gone.'
 	
 	# Функция возвращает количество обработанных байт
@@ -72,8 +79,8 @@ class Player:
 				operatedBytes += SHORT_SIZE
 				# Вызываем соответствующую функцию. Все функции-обработчики
 				# должны также возвращать количество обработанных ими байт.
-				if comId == C_LOGIN:
-					pass
+				if comId == C_ITEM_INFO:
+					operatedBytes += self.cItemInfo(data[operatedBytes:])
 				else:
 					pass
 				# После обработки одной команды смотрим, есть ли еще
@@ -91,6 +98,34 @@ class Player:
 			else:
 				operatedBytes -= INT_SIZE
 				return operatedBytes
+	
+	# ==================================================================
+	# Функции отправки команд клиенту
+	# ==================================================================
+	def sLoginSuccess(self):
+		self.socket.sendall(pack('<ih', 2, S_LOGIN_SUCCESS))
+	
+	def sFullParams(self):
+		nameLen = len(self.name)
+		paramsJSON = json.dumps(self.params)
+		paramsLen = len(paramsJSON)
+		comSize = SHORT_SIZE * 3 + INT_SIZE + nameLen + paramsLen
+		self.socket.sendall(pack('<ihih' + str(nameLen) + 'sh' + str(paramsLen) + 's',
+			comSize, S_FULL_PARAMS, self.id, nameLen, self.name, paramsLen, paramsJSON))
+
+	# ==================================================================
+	# Функции-обработчики команд клиента
+	# ==================================================================
+	def cItemInfo(self, data):
+		id = getShort(data, 0)
+		if self.cursor.execute("SELECT params FROM items WHERE id=" + str(id)) == 1:
+			params = str(self.cursor.fetchone()[0])
+			paramsLen = len(params)
+			comSize = SHORT_SIZE * 3 + paramsLen
+			self.socket.sendall(pack('<ihhh' + str(paramsLen) + 's',
+				comSize, S_ITEM_INFO, id, paramsLen, params))
+		return SHORT_SIZE
+
 
 # Функция принимающая сокет и ожидающая от клиента команды C_LOGIN
 # Фактически эта функция запускается в отдельном потоке и далее,
@@ -174,13 +209,13 @@ def parse(data, socket, db):
 		# Если rc (rows count) == 0, значит такой пары логин/пароль
 		# в базе данных нет.
 		if not rc:
-			socket.sendall(pack('ihb', 3, S_WRONG_LOGIN, 1))
+			socket.sendall(pack('<ihb', 3, S_LOGIN_FAILURE, 1))
 			return 3
 		# Достаем данные
 		data = cursor.fetchall()[0]
 		# Если кто-то уже играет под этим логином, уходим
 		if data[1] == 1:
-			socket.sendall(pack('ihb', 3, S_WRONG_LOGIN, 2))
+			socket.sendall(pack('<ihb', 3, S_LOGIN_FAILURE, 2))
 			return 4
 		# А если нет, отмечаем что данный логин уже занят
 		cursor.execute("UPDATE user SET is_playing=1 WHERE id=" + str(data[0]))
@@ -205,7 +240,7 @@ def parse(data, socket, db):
 		cursor.execute("SELECT id FROM user WHERE login='" + login + "'")
 		if cursor.rowcount > 0:
 			cursor.close()
-			socket.sendall(pack('ihb', 3, S_REGISTER_FAILURE, 1))
+			socket.sendall(pack('<ihb', 3, S_REGISTER_FAILURE, 1))
 			return 5
 		cursor.close()
 		# Проверим логин регуляркой
@@ -213,7 +248,7 @@ def parse(data, socket, db):
 		# Черная магия!
 		res = re.findall(u'[a-zA-Zа-яА-ЯЁё]+[a-zA-Zа-яА-Я0-9Ёё]*', login, re.U)
 		if res == None or (len(res) > 0 and len(login) != len(res[0])):
-			socket.sendall(pack('ihb', 3, S_REGISTER_FAILURE, 2))
+			socket.sendall(pack('<ihb', 3, S_REGISTER_FAILURE, 2))
 			return 6
 		# Конец черной магии
 		pos += 2 + len(login)
@@ -242,14 +277,28 @@ def parse(data, socket, db):
 		if usedOP > 50:
 			return -8
 		speed = (dexterity + health) / 4.0
-		params = { "strength":strength, "dexterity":dexterity,
-			"intellect":intellect, "health":health, "usedOP":usedOP,
+		params = {
+			"strength":strength,
+			"dexterity":dexterity,
+			"intellect":intellect,
+			"health":health,
+			"usedOP":usedOP,
 			"unusedOP":50 - usedOP,
 			"speed":speed,
 			"hitPoints":health,
 			"deviation":int(speed) + 3,
-			"maxLoad":int((strength * strength) / 5.0)
-			}
+			"maxLoad":int((strength * strength) / 5.0),
+			"energy":75,
+			"handWeapon":0,
+			"beltWeapon":0,
+			"armour":0,
+			"pants":0,
+			"money":123,
+			"actPoints":int(speed),
+			"resistance":0,
+			"perks":{},
+			"backpack":{}
+		}
 		# Создаем запись в базе данных
 		cursor = db.cursor()
 		cursor.execute("INSERT INTO user (id, login, password, is_playing, params)" +
@@ -260,7 +309,7 @@ def parse(data, socket, db):
 		data = cursor.fetchall()[0]
 		cursor.close()
 		# Отсылаем сообщение об успешной авторизации
-		socket.sendall(pack('ih', 2, S_REGISTER_SUCCESS))
+		socket.sendall(pack('<ih', 2, S_REGISTER_SUCCESS))
 		# Создаем объект Player и передаем ему данные
 		player = Player(data[0], login, json.dumps(params), socket, db)
 		# Запускаем обработку данных игроком
