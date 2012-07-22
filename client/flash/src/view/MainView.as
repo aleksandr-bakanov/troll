@@ -11,6 +11,7 @@ package view
 	import view.menu.LoginWindow;
 	import view.menu.MainWindow;
 	import view.menu.RegistrationWindow;
+	import view.menu.ShopWindow;
 	
 	/**
 	 * Main application view.
@@ -23,6 +24,7 @@ package view
 		public static const MAIN_WINDOW:String = "main_window";
 		public static const LEVEL_UP_WINDOW:String = "level_up_window";
 		public static const BACKPACK_WINDOW:String = "backpack_window";
+		public static const SHOP_WINDOW:String = "shop_window";
 
 		private var _model:MainModel;
 		private var _windows:Object;
@@ -31,6 +33,7 @@ package view
 		private var _mainWindow:MainWindow;
 		private var _leveUpWindow:LevelUpWindow;
 		private var _backpackWindow:BackpackWindow;
+		private var _shopWindow:ShopWindow;
 
 		public function MainView(model:MainModel, host:DisplayObjectContainer) 
 		{
@@ -81,6 +84,8 @@ package view
 			_windows[LEVEL_UP_WINDOW] = _leveUpWindow;
 			_backpackWindow = new BackpackWindow(_model);
 			_windows[BACKPACK_WINDOW] = _backpackWindow;
+			_shopWindow = new ShopWindow(_model);
+			_windows[SHOP_WINDOW] = _shopWindow;
 			resizeHandler();
 		}
 		

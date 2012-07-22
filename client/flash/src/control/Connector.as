@@ -25,6 +25,7 @@ package control
 		public static const S_LOGIN_SUCCESS:int = 9;
 		public static const S_FULL_PARAMS:int = 11;
 		public static const S_ITEM_INFO:int = 13;
+		public static const S_SHOP_ITEMS:int = 15;
 		// Client side
 		public static const C_LOGIN:int = 2;
 		public static const C_REGISTER:int = 4;
@@ -134,6 +135,7 @@ package control
 				case S_LOGIN_SUCCESS: sLoginSuccess(); break;
 				case S_FULL_PARAMS: sFullParams(); break;
 				case S_ITEM_INFO: sItemInfo(); break;
+				case S_SHOP_ITEMS: sShopItems(); break;
 				default: break;
 			}
 			_lastComSize = 0;
@@ -194,6 +196,17 @@ package control
 			var id:int = _socket.readShort();
 			var json:String = _socket.readUTF();
 			MainModel.items[String(id)] = JSON.decode(json);
+		}
+		
+		private function sShopItems():void 
+		{
+			var data:Object = JSON.decode(_socket.readUTF());
+			for (var id:String in data)
+			{
+				MainModel.items[id] = JSON.decode(data[id]);
+				Debug.out(MainModel.items[id].name);
+			}
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.INIT_SHOP));
 		}
 
 

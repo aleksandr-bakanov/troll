@@ -57,6 +57,8 @@ class Player:
 		self.sLoginSuccess()
 		# Отправляем параметры персонажа
 		self.sFullParams()
+		# Отправляем параметры магазина
+		self.sShopItems()
 		# Начинаем парсить данные приходящие от клиента
 		data = ''
 		commandLen = 0
@@ -142,6 +144,18 @@ class Player:
 		comSize = SHORT_SIZE * 3 + INT_SIZE + nameLen + paramsLen
 		self.socket.sendall(pack('<ihih' + str(nameLen) + 'sh' + str(paramsLen) + 's',
 			comSize, S_FULL_PARAMS, self.id, nameLen, self.name, paramsLen, paramsJSON))
+	
+	def sShopItems(self):
+		self.cursor.execute("SELECT * FROM items")
+		data = self.cursor.fetchall()
+		items = {}
+		for pair in data:
+			items[str(pair[0])] = pair[1]
+		items = json.dumps(items)
+		itemsLen = len(items)
+		comSize = SHORT_SIZE * 2 + itemsLen
+		self.socket.sendall(pack('<ihh' + str(itemsLen) + 's',
+			comSize, S_SHOP_ITEMS, itemsLen, items))
 
 	# ==================================================================
 	# Функции-обработчики команд клиента

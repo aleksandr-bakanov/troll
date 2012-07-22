@@ -18,7 +18,8 @@ package model
 		public var params:Object;
 		private var _oldParams:Object;
 		
-		public static const items:Object = { };
+		// Хранилище параметров предметов. Ключи - строковые id.
+		public static const items:Object = {};
 
 		public function MainModel() 
 		{

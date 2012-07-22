@@ -23,6 +23,7 @@ S_REGISTER_FAILURE = 7
 S_LOGIN_SUCCESS = 9
 S_FULL_PARAMS = 11
 S_ITEM_INFO = 13
+S_SHOP_ITEMS = 15
 
 # Client side commands ids
 C_LOGIN = 2
