@@ -165,6 +165,7 @@ class Player:
 		if id in self.params["backpack"]:
 			if wear:
 				if weared < count:
+					places = [1, 2, 3, 4]
 					if place == PLACE_ARMOUR:
 						self.params["armour"] = self.params["backpack"][id]
 					elif place == PLACE_PANTS:
@@ -173,9 +174,11 @@ class Player:
 						self.params["handWeapon"] = self.params["backpack"][id]
 					elif place == PLACE_BELT_WEAPON:
 						self.params["beltWeapon"] = self.params["backpack"][id]
-					self.params["backpack"][id]["weared"] += 1
+					if place in places:
+						self.params["backpack"][id]["weared"] += 1
 			else:
 				if weared > 0:
+					places = [1, 2, 3, 4]
 					if place == PLACE_ARMOUR:
 						self.params["armour"] = 0
 					elif place == PLACE_PANTS:
@@ -184,7 +187,8 @@ class Player:
 						self.params["handWeapon"] = 0
 					elif place == PLACE_BELT_WEAPON:
 						self.params["beltWeapon"] = 0
-					self.params["backpack"][id]["weared"] -= 1
+					if place in places:
+						self.params["backpack"][id]["weared"] -= 1
 		return SHORT_SIZE + BOOL_SIZE + CHAR_SIZE
 
 	def cDropItem(self, data):
