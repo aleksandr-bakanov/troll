@@ -9,6 +9,15 @@ import threading
 # при каждом подключении клиента.
 from src.player import run
 
+# При старте сервера делаем всех игроков не играющими
+import MySQLdb
+db = MySQLdb.connect(host="localhost", user="root", passwd="1", db="troll", charset='utf8')
+c = db.cursor()
+c.execute("UPDATE user SET is_playing = 0 WHERE 1")
+db.commit()
+c.close()
+db.close()
+
 # Создаем сервер и слушаем подключение клиентов
 import socket
 HOST = ''

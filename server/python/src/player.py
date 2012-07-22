@@ -21,6 +21,33 @@ class Player:
 		self.socket = socket
 		self.db = db
 		self.cursor = db.cursor()
+		self.initBackpack()
+	
+	# Функция инициализации рюкзака
+	def initBackpack(self):
+		for id in self.params["backpack"]:
+			count = self.params["backpack"][id]
+			self.cursor.execute("SELECT params FROM items WHERE id=" + id)
+			params = json.loads(self.cursor.fetchone()[0])
+			params["count"] = count
+			params["weared"] = 0
+			self.params["backpack"][id] = params
+		a = ["armour", "pants", "beltWeapon", "handWeapon"]
+		for n in a:
+			if self.params[n] == 0:
+				continue
+			params = self.params["backpack"][str(self.params[n])]
+			params["weared"] += 1
+			self.params[n] = params
+	
+	# Подготовка параметров персонажа перед записью в базу
+	def reduceParams(self):
+		for id in self.params["backpack"]:
+			self.params["backpack"][id] = self.params["backpack"][id]["count"]
+		a = ["armour", "pants", "beltWeapon", "handWeapon"]
+		for n in a:
+			if self.params[n]:
+				self.params[n] = self.params[n]["id"]
 
 	# Функция запускает цикл в ожидании команд от клиента.
 	# После прихода очередной команды запускает parse.
@@ -54,6 +81,7 @@ class Player:
 			else:
 				continue
 		# Уходя, обновляем is_playing в базе и закрываем с ней соединение
+		self.reduceParams()
 		self.cursor.execute("UPDATE user SET is_playing=0, params='" +
 			json.dumps(self.params) + "' WHERE id=" + str(self.id))
 		self.db.commit()
@@ -81,8 +109,10 @@ class Player:
 				# должны также возвращать количество обработанных ими байт.
 				if comId == C_ITEM_INFO:
 					operatedBytes += self.cItemInfo(data[operatedBytes:])
-				else:
-					pass
+				elif comId == C_WEAR_ITEM:
+					operatedBytes += self.cWearItem(data[operatedBytes:])
+				elif comId == C_DROP_ITEM:
+					operatedBytes += self.cDropItem(data[operatedBytes:])
 				# После обработки одной команды смотрим, есть ли еще
 				# что обработать.
 				# Если мы обработали все байты, переданные нам, возвращаем
@@ -119,13 +149,64 @@ class Player:
 	def cItemInfo(self, data):
 		id = getShort(data, 0)
 		if self.cursor.execute("SELECT params FROM items WHERE id=" + str(id)) == 1:
-			params = str(self.cursor.fetchone()[0])
-			paramsLen = len(params)
+			params = unicode(self.cursor.fetchone()[0])
+			paramsLen = len(params.encode('utf-8'))
 			comSize = SHORT_SIZE * 3 + paramsLen
 			self.socket.sendall(pack('<ihhh' + str(paramsLen) + 's',
-				comSize, S_ITEM_INFO, id, paramsLen, params))
+				comSize, S_ITEM_INFO, id, paramsLen, params.encode('utf-8')))
 		return SHORT_SIZE
+	
+	def cWearItem(self, data):
+		id = str(getShort(data, 0))
+		wear = getBool(data, SHORT_SIZE)
+		place = getChar(data, SHORT_SIZE + BOOL_SIZE)
+		weared = self.params["backpack"][id]["weared"]
+		count = self.params["backpack"][id]["count"]
+		if id in self.params["backpack"]:
+			if wear:
+				if weared < count:
+					if place == PLACE_ARMOUR:
+						self.params["armour"] = self.params["backpack"][id]
+					elif place == PLACE_PANTS:
+						self.params["pants"] = self.params["backpack"][id]
+					elif place == PLACE_HAND_WEAPON:
+						self.params["handWeapon"] = self.params["backpack"][id]
+					elif place == PLACE_BELT_WEAPON:
+						self.params["beltWeapon"] = self.params["backpack"][id]
+					self.params["backpack"][id]["weared"] += 1
+			else:
+				if weared > 0:
+					if place == PLACE_ARMOUR:
+						self.params["armour"] = 0
+					elif place == PLACE_PANTS:
+						self.params["pants"] = 0
+					elif place == PLACE_HAND_WEAPON:
+						self.params["handWeapon"] = 0
+					elif place == PLACE_BELT_WEAPON:
+						self.params["beltWeapon"] = 0
+					self.params["backpack"][id]["weared"] -= 1
+		return SHORT_SIZE + BOOL_SIZE + CHAR_SIZE
 
+	def cDropItem(self, data):
+		id = str(getShort(data, 0))
+		place = getChar(data, SHORT_SIZE)
+		if id in self.params["backpack"]:
+			weared = self.params["backpack"][id]["weared"]
+			count = self.params["backpack"][id]["count"]
+			if weared == count:
+				self.params["backpack"][id]["weared"] -= 1
+			self.params["backpack"][id]["count"] -= 1
+			if self.params["backpack"][id]["count"] == 0:
+				del self.params["backpack"][id]
+			if place == PLACE_ARMOUR:
+				self.params["armour"] = 0
+			elif place == PLACE_PANTS:
+				self.params["pants"] = 0
+			elif place == PLACE_HAND_WEAPON:
+				self.params["handWeapon"] = 0
+			elif place == PLACE_BELT_WEAPON:
+				self.params["beltWeapon"] = 0
+		return SHORT_SIZE + CHAR_SIZE
 
 # Функция принимающая сокет и ожидающая от клиента команды C_LOGIN
 # Фактически эта функция запускается в отдельном потоке и далее,
@@ -162,7 +243,6 @@ def run (socket):
 				# Если сообщение пришло целиком, отправляемся на парсинг
 				if len(data) - INT_SIZE >= commandLen:
 					result = parse(data, socket, db)
-					print 'parse result = ', result
 					if result < 0:
 						break
 			# Иначе, ждем еще байтов
@@ -225,6 +305,7 @@ def parse(data, socket, db):
 		player = Player(data[0], login, data[2], socket, db)
 		# Запускаем обработку данных игроком
 		player.run()
+		del player
 		return -1
 	elif comId == C_REGISTER:
 		## TODO: Проверить login на SQL-инъекции
@@ -314,6 +395,7 @@ def parse(data, socket, db):
 		player = Player(data[0], login, json.dumps(params), socket, db)
 		# Запускаем обработку данных игроком
 		player.run()
+		del player
 		return -1
 	else:
 		return 0

@@ -29,6 +29,8 @@ package control
 		public static const C_LOGIN:int = 2;
 		public static const C_REGISTER:int = 4;
 		public static const C_ITEM_INFO:int = 6;
+		public static const C_WEAR_ITEM:int = 8;
+		public static const C_DROP_ITEM:int = 10;
 		
 		private var _socket:Socket;
 		private var _lastComSize:int;
@@ -51,6 +53,8 @@ package control
 			Dispatcher.instance.addEventListener(UserEvent.SEND_LOGIN, cLogin);
 			Dispatcher.instance.addEventListener(UserEvent.SEND_REGISTER, cRegister);
 			Dispatcher.instance.addEventListener(UserEvent.SEND_ITEM_INFO_REQUEST, cItemInfo);
+			Dispatcher.instance.addEventListener(UserEvent.WEAR_ITEM, cWearItem);
+			Dispatcher.instance.addEventListener(UserEvent.DROP_ITEM, cDropItem);
 		}
 		
 		private function configureSocket():void
@@ -183,12 +187,6 @@ package control
 			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.PARAMS_UPDATED, _model.params));
 			// Инициализируем инвентарь
 			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.INIT_BACKPACK, _model.params.backpack));
-			// Запрашиваем параметры предметов
-			for (var id:String in _model.params.backpack)
-			{
-				/// TODO: Тут бы переделать, чтобы не создавать объектов событий
-				cItemInfo(new UserEvent(UserEvent.SEND_ITEM_INFO_REQUEST, parseInt(id)));
-			}
 		}
 		
 		private function sItemInfo():void 
@@ -236,6 +234,25 @@ package control
 			_socket.writeInt(4);
 			_socket.writeShort(C_ITEM_INFO);
 			_socket.writeShort(e.data as int);
+			_socket.flush();
+		}
+		
+		private function cWearItem(e:UserEvent):void 
+		{
+			_socket.writeInt(6);
+			_socket.writeShort(C_WEAR_ITEM);
+			_socket.writeShort(e.data.id);
+			_socket.writeBoolean(e.data.wear);
+			_socket.writeByte(e.data.place);
+			_socket.flush();
+		}
+		
+		private function cDropItem(e:UserEvent):void 
+		{
+			_socket.writeInt(5);
+			_socket.writeShort(C_DROP_ITEM);
+			_socket.writeShort(e.data.id);
+			_socket.writeByte(e.data.place);
 			_socket.flush();
 		}
 

@@ -16,6 +16,8 @@ package control
 		public static const SEND_REGISTER:String = "send_register";
 		public static const SEND_ITEM_INFO_REQUEST:String = "send_item_info_request";
 		public static const INIT_BACKPACK:String = "init_backpack";
+		public static const WEAR_ITEM:String = "wear_item";
+		public static const DROP_ITEM:String = "drop_item";
 		
 		public var data:Object;
 		

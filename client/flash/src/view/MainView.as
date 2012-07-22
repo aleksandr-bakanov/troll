@@ -79,7 +79,7 @@ package view
 			_windows[MAIN_WINDOW] = _mainWindow;
 			_leveUpWindow = new LevelUpWindow();
 			_windows[LEVEL_UP_WINDOW] = _leveUpWindow;
-			_backpackWindow = new BackpackWindow();
+			_backpackWindow = new BackpackWindow(_model);
 			_windows[BACKPACK_WINDOW] = _backpackWindow;
 			resizeHandler();
 		}
