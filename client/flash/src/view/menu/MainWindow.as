@@ -27,6 +27,7 @@ package view.menu
 			Dispatcher.instance.addEventListener(UserEvent.PARAMS_UPDATED, paramsUpdated);
 			module.levelup.addEventListener(MouseEvent.CLICK, showOtherWindow);
 			module.backpack.addEventListener(MouseEvent.CLICK, showOtherWindow);
+			module.shop.addEventListener(MouseEvent.CLICK, showOtherWindow);
 		}
 		
 		private function showOtherWindow(e:MouseEvent):void 
@@ -36,6 +37,8 @@ package view.menu
 				window = MainView.LEVEL_UP_WINDOW;
 			else if (e.currentTarget.name == "backpack")
 				window = MainView.BACKPACK_WINDOW;
+			else if (e.currentTarget.name == "shop")
+				window = MainView.SHOP_WINDOW;
 			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.SHOW_WINDOW, window));
 		}
 		

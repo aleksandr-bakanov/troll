@@ -89,6 +89,36 @@ package view
 			resizeHandler();
 		}
 		
+		public function get loginWindow():LoginWindow 
+		{
+			return _loginWindow;
+		}
+		
+		public function get registrationWindow():RegistrationWindow 
+		{
+			return _registrationWindow;
+		}
+		
+		public function get mainWindow():MainWindow 
+		{
+			return _mainWindow;
+		}
+		
+		public function get leveUpWindow():LevelUpWindow 
+		{
+			return _leveUpWindow;
+		}
+		
+		public function get backpackWindow():BackpackWindow 
+		{
+			return _backpackWindow;
+		}
+		
+		public function get shopWindow():ShopWindow 
+		{
+			return _shopWindow;
+		}
+		
 	}
 
 }

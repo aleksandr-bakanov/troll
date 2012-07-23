@@ -115,6 +115,8 @@ class Player:
 					operatedBytes += self.cWearItem(data[operatedBytes:])
 				elif comId == C_DROP_ITEM:
 					operatedBytes += self.cDropItem(data[operatedBytes:])
+				elif comId == C_SELL_ITEM:
+					operatedBytes += self.cSellItem(data[operatedBytes:])
 				# После обработки одной команды смотрим, есть ли еще
 				# что обработать.
 				# Если мы обработали все байты, переданные нам, возвращаем
@@ -156,6 +158,9 @@ class Player:
 		comSize = SHORT_SIZE * 2 + itemsLen
 		self.socket.sendall(pack('<ihh' + str(itemsLen) + 's',
 			comSize, S_SHOP_ITEMS, itemsLen, items))
+	
+	def sClientMoney(self):
+		self.socket.sendall(pack('<ihi', 2, S_CLIENT_MONEY, self.params["money"]))
 
 	# ==================================================================
 	# Функции-обработчики команд клиента
@@ -213,6 +218,8 @@ class Player:
 			count = self.params["backpack"][id]["count"]
 			if weared == count:
 				self.params["backpack"][id]["weared"] -= 1
+				if not place:
+					self.removeWearedItem(int(id))
 			self.params["backpack"][id]["count"] -= 1
 			if self.params["backpack"][id]["count"] == 0:
 				del self.params["backpack"][id]
@@ -225,7 +232,32 @@ class Player:
 			elif place == PLACE_BELT_WEAPON:
 				self.params["beltWeapon"] = 0
 		return SHORT_SIZE + CHAR_SIZE
-
+	
+	def cSellItem(self, data):
+		id = str(getShort(data, 0))
+		if id in self.params["backpack"]:
+			info = self.params["backpack"][id]
+			cost = info["cost"]
+			if self.params["money"] >= cost:
+				weared = info["weared"]
+				count = info["count"]
+				if weared == count:
+					info["weared"] -= 1
+					self.removeWearedItem(int(id))
+				info["count"] -= 1
+				if info["count"] == 0:
+					del self.params["backpack"][id]
+				self.params["money"] += cost
+				self.sClientMoney()
+		return SHORT_SIZE
+	
+	def removeWearedItem(self, id):
+		places = ["armour", "pants", "handWeapon", "beltWeapon"]
+		for p in places:
+			if self.params[p] and self.params[p]["id"] == id:
+				self.params[p] = 0
+				break
+	
 # Функция принимающая сокет и ожидающая от клиента команды C_LOGIN
 # Фактически эта функция запускается в отдельном потоке и далее,
 # если клиент прислал верную пару логин/пароль, создается объект

@@ -26,12 +26,16 @@ package control
 		public static const S_FULL_PARAMS:int = 11;
 		public static const S_ITEM_INFO:int = 13;
 		public static const S_SHOP_ITEMS:int = 15;
+		public static const S_ADD_ITEM:int = 17;
+		public static const S_CLIENT_MONEY:int = 19;
 		// Client side
 		public static const C_LOGIN:int = 2;
 		public static const C_REGISTER:int = 4;
 		public static const C_ITEM_INFO:int = 6;
 		public static const C_WEAR_ITEM:int = 8;
 		public static const C_DROP_ITEM:int = 10;
+		public static const C_BUY_ITEM:int = 12;
+		public static const C_SELL_ITEM:int = 14;
 		
 		private var _socket:Socket;
 		private var _lastComSize:int;
@@ -55,7 +59,8 @@ package control
 			Dispatcher.instance.addEventListener(UserEvent.SEND_REGISTER, cRegister);
 			Dispatcher.instance.addEventListener(UserEvent.SEND_ITEM_INFO_REQUEST, cItemInfo);
 			Dispatcher.instance.addEventListener(UserEvent.WEAR_ITEM, cWearItem);
-			Dispatcher.instance.addEventListener(UserEvent.DROP_ITEM, cDropItem);
+			Dispatcher.instance.addEventListener(UserEvent.SEND_DROP_ITEM, cDropItem);
+			Dispatcher.instance.addEventListener(UserEvent.SEND_SELL_ITEM, cSellItem);
 		}
 		
 		private function configureSocket():void
@@ -136,6 +141,7 @@ package control
 				case S_FULL_PARAMS: sFullParams(); break;
 				case S_ITEM_INFO: sItemInfo(); break;
 				case S_SHOP_ITEMS: sShopItems(); break;
+				case S_CLIENT_MONEY: sClientMoney(); break;
 				default: break;
 			}
 			_lastComSize = 0;
@@ -208,6 +214,12 @@ package control
 			}
 			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.INIT_SHOP));
 		}
+		
+		private function sClientMoney():void 
+		{
+			_model.params.money = _socket.readInt();
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.PARAMS_UPDATED, _model.params));
+		}
 
 
 		//=============================================================
@@ -266,6 +278,14 @@ package control
 			_socket.writeShort(C_DROP_ITEM);
 			_socket.writeShort(e.data.id);
 			_socket.writeByte(e.data.place);
+			_socket.flush();
+		}
+		
+		private function cSellItem(e:UserEvent):void 
+		{
+			_socket.writeInt(4);
+			_socket.writeShort(C_SELL_ITEM);
+			_socket.writeShort(e.data as int);
 			_socket.flush();
 		}
 

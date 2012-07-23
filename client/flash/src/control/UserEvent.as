@@ -18,7 +18,10 @@ package control
 		public static const INIT_BACKPACK:String = "init_backpack";
 		public static const WEAR_ITEM:String = "wear_item";
 		public static const DROP_ITEM:String = "drop_item";
+		public static const SEND_DROP_ITEM:String = "send_drop_item";
 		public static const INIT_SHOP:String = "init_shop";
+		public static const SELL_ITEM:String = "sell_item";
+		public static const SEND_SELL_ITEM:String = "send_sell_item";
 		
 		public var data:Object;
 		

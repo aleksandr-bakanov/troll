@@ -2,9 +2,12 @@ package view.menu
 {
 	import control.Dispatcher;
 	import control.UserEvent;
+	import flash.display.DisplayObject;
+	import flash.display.MovieClip;
 	import flash.display.Sprite;
 	import flash.events.Event;
 	import flash.events.MouseEvent;
+	import flash.sampler.NewObjectSample;
 	import model.MainModel;
 	import view.MainView;
 	
@@ -38,10 +41,18 @@ package view.menu
 		
 		private function addedHandler(e:Event):void 
 		{
-			for (var id:String in backpack)
+			var id:String;
+			var info:Object;
+			for (id in backpack)
 			{
-				var info:Object = _model.params.backpack[id];
-				item.tf.text = id + ") " + info.name + " (" + info.count + ")";
+				info = _model.params.backpack[id];
+				(backpack[id] as Shop_item_asset).tf.text = id + ") " + info.name + " (" + info.count + ")";
+			}
+			var money:int = _model.params.money;
+			for (id in shop)
+			{
+				info = MainModel.items[id];
+				(shop[id] as Shop_item_asset).btn.visible = money >= info.cost;
 			}
 		}
 		
@@ -67,6 +78,7 @@ package view.menu
 				module.backpack.addChild(item);
 				backpack[id] = item;
 				item.btn.addEventListener(MouseEvent.CLICK, sellItem);
+				item.btn.id = id;
 			}
 			// Инициализируем предметы в магазине
 			counter = 0;
@@ -80,6 +92,7 @@ package view.menu
 				module.shop.addChild(item);
 				shop[id] = item;
 				item.btn.addEventListener(MouseEvent.CLICK, buyItem);
+				item.btn.id = id;
 			}
 		}
 		
@@ -90,7 +103,34 @@ package view.menu
 		
 		private function sellItem(e:MouseEvent):void 
 		{
-			
+			var id:String = (e.currentTarget as Object).id as String;
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.SELL_ITEM, parseInt(id)));
+		}
+		
+		public function dropBackpackItem(id:int):void
+		{
+			var idStr:String = String(id);
+			var info:Object = _model.params.backpack[idStr];
+			var item:Shop_item_asset = backpack[idStr] as Shop_item_asset;
+			if (!info)
+			{
+				item.btn.removeEventListener(MouseEvent.CLICK, sellItem);
+				module.backpack.removeChild(item);
+				delete backpack[idStr];
+				sortItems();
+			}
+			else
+				item.tf.text = idStr + ") " + info.name + " (" + info.count + ")";
+		}
+		
+		private function sortItems():void 
+		{
+			var counter:int = 0;
+			for (var id:String in backpack)
+			{
+				var item:DisplayObject = backpack[id] as DisplayObject;
+				item.y = item.height * counter++;
+			}
 		}
 		
 		private function returnClickHandler(e:MouseEvent):void 

@@ -42,6 +42,20 @@ package view.menu
 		{
 			Dispatcher.instance.addEventListener(UserEvent.INIT_BACKPACK, initBackpack);
 			module.returnBtn.addEventListener(MouseEvent.CLICK, returnClickHandler);
+			addEventListener(Event.ADDED, addedHandler);
+		}
+		
+		private function addedHandler(e:Event = null):void 
+		{
+			var id:String;
+			var info:Object;
+			var totalWeight:int = 0;
+			for (id in _model.params.backpack)
+			{
+				info = _model.params.backpack[id];
+				totalWeight += info.weight * info.count;
+			}
+			module.rest.text = String(_model.params.maxLoad - totalWeight);
 		}
 		
 		private function wearItem(e:MouseEvent):void 
@@ -133,43 +147,37 @@ package view.menu
 				{ id:id, wear:false, place:place } ));
 		}
 		
-		private function dropItem(e:MouseEvent):void 
+		private function dropHandler(e:MouseEvent):void 
 		{
 			var id:String = (e.currentTarget as MovieClip).id;
-			var info:Object = _model.params.backpack[id];
-			info.count--;
-			(items[id] as MovieClip).tf.text = id + ") " + info.name + " (" + info.count + ")";
-			if (!_model.params.backpack[id].count)
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.DROP_ITEM, parseInt(id) ));
+		}
+		
+		public function dropItem(id:int, place:int):void
+		{
+			var idStr:String = String(id);
+			var info:Object = _model.params.backpack[idStr];
+			var item:Item_asset = items[idStr] as Item_asset;
+			if (!info)
 			{
-				// Спасибо Тигре :-)
-				(e.currentTarget as IEventDispatcher).removeEventListener(e.type, arguments.callee);
-				(items[id] as Item_asset).wear.removeEventListener(MouseEvent.CLICK, wearItem);
-				module.items.removeChild(items[id]);
-				delete items[id];
-				delete _model.params.backpack[id];
+				item.drop.removeEventListener(MouseEvent.CLICK, dropHandler);
+				item.wear.removeEventListener(MouseEvent.CLICK, wearItem);
+				module.items.removeChild(item);
+				delete items[idStr];
 				sortItems();
 			}
-			var place:int = 0;
-			var intId:int = parseInt(id);
-			if (info.count < info.weared)
+			else
+				item.tf.text = idStr + ") " + info.name + " (" + info.count + ")";
+			if (place)
 			{
 				var places:Array = ["armour", "pants", "handWeapon", "beltWeapon"];
-				for (var i:int = 0; i < places.length; i++)
-				{
-					if (_model.params[places[i]] && _model.params[places[i]].id == intId)
-					{
-						var cont:MovieClip = module[places[i]] as MovieClip;
-						cont.drop.visible = false;
-						cont.tf.text = "";
-						cont.drop.id = 0;
-						place = i + 1;
-						_model.params[places[i]] = 0;
-						info.weared--;
-						break;
-					}
-				}
+				var cont:MovieClip = module[places[place - 1]] as MovieClip;
+				cont.drop.visible = false;
+				cont.tf.text = "";
+				cont.drop.id = 0;
 			}
-			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.DROP_ITEM, { id:intId, place:place } ));
+			// Обновляем вес
+			addedHandler();
 		}
 		
 		private function sortItems():void 
@@ -201,7 +209,7 @@ package view.menu
 				totalWeight += e.data[id].weight * e.data[id].count;
 				if (info.type == WEAPON || info.type == ARMOUR || info.type == PANTS)
 				{
-					item.drop.addEventListener(MouseEvent.CLICK, dropItem);
+					item.drop.addEventListener(MouseEvent.CLICK, dropHandler);
 					item.wear.addEventListener(MouseEvent.CLICK, wearItem);
 					item.drop.id = item.wear.id = id;
 				}
