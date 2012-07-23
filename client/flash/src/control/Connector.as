@@ -61,6 +61,7 @@ package control
 			Dispatcher.instance.addEventListener(UserEvent.WEAR_ITEM, cWearItem);
 			Dispatcher.instance.addEventListener(UserEvent.SEND_DROP_ITEM, cDropItem);
 			Dispatcher.instance.addEventListener(UserEvent.SEND_SELL_ITEM, cSellItem);
+			Dispatcher.instance.addEventListener(UserEvent.SEND_BUY_ITEM, cBuyItem);
 		}
 		
 		private function configureSocket():void
@@ -142,6 +143,7 @@ package control
 				case S_ITEM_INFO: sItemInfo(); break;
 				case S_SHOP_ITEMS: sShopItems(); break;
 				case S_CLIENT_MONEY: sClientMoney(); break;
+				case S_ADD_ITEM: sAddItem(); break;
 				default: break;
 			}
 			_lastComSize = 0;
@@ -208,10 +210,7 @@ package control
 		{
 			var data:Object = JSON.decode(_socket.readUTF());
 			for (var id:String in data)
-			{
 				MainModel.items[id] = JSON.decode(data[id]);
-				Debug.out(MainModel.items[id].name);
-			}
 			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.INIT_SHOP));
 		}
 		
@@ -219,6 +218,22 @@ package control
 		{
 			_model.params.money = _socket.readInt();
 			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.PARAMS_UPDATED, _model.params));
+		}
+		
+		private function sAddItem():void 
+		{
+			var id:int = _socket.readShort();
+			var count:int = _socket.readByte();
+			var idStr:String = String(id);
+			if (_model.params.backpack[idStr])
+				_model.params.backpack[idStr].count += count;
+			else
+			{
+				_model.params.backpack[idStr] = MainModel.items[idStr];
+				_model.params.backpack[idStr].count = count;
+				_model.params.backpack[idStr].weared = 0;
+			}
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.ADD_ITEM, id));
 		}
 
 
@@ -285,6 +300,14 @@ package control
 		{
 			_socket.writeInt(4);
 			_socket.writeShort(C_SELL_ITEM);
+			_socket.writeShort(e.data as int);
+			_socket.flush();
+		}
+		
+		private function cBuyItem(e:UserEvent):void 
+		{
+			_socket.writeInt(4);
+			_socket.writeShort(C_BUY_ITEM);
 			_socket.writeShort(e.data as int);
 			_socket.flush();
 		}

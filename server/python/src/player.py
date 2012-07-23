@@ -39,16 +39,8 @@ class Player:
 			params = self.params["backpack"][str(self.params[n])]
 			params["weared"] += 1
 			self.params[n] = params
+		self.checkItemsProps()
 	
-	# Подготовка параметров персонажа перед записью в базу
-	def reduceParams(self):
-		for id in self.params["backpack"]:
-			self.params["backpack"][id] = self.params["backpack"][id]["count"]
-		a = ["armour", "pants", "beltWeapon", "handWeapon"]
-		for n in a:
-			if self.params[n]:
-				self.params[n] = self.params[n]["id"]
-
 	# Функция запускает цикл в ожидании команд от клиента.
 	# После прихода очередной команды запускает parse.
 	def run(self):
@@ -117,6 +109,8 @@ class Player:
 					operatedBytes += self.cDropItem(data[operatedBytes:])
 				elif comId == C_SELL_ITEM:
 					operatedBytes += self.cSellItem(data[operatedBytes:])
+				elif comId == C_BUY_ITEM:
+					operatedBytes += self.cBuyItem(data[operatedBytes:])
 				# После обработки одной команды смотрим, есть ли еще
 				# что обработать.
 				# Если мы обработали все байты, переданные нам, возвращаем
@@ -160,7 +154,10 @@ class Player:
 			comSize, S_SHOP_ITEMS, itemsLen, items))
 	
 	def sClientMoney(self):
-		self.socket.sendall(pack('<ihi', 2, S_CLIENT_MONEY, self.params["money"]))
+		self.socket.sendall(pack('<ihi', 3, S_CLIENT_MONEY, self.params["money"]))
+
+	def sAddItem(self, id, count):
+		self.socket.sendall(pack('<ihhb', 5, S_ADD_ITEM, id, count))
 
 	# ==================================================================
 	# Функции-обработчики команд клиента
@@ -174,7 +171,7 @@ class Player:
 			self.socket.sendall(pack('<ihhh' + str(paramsLen) + 's',
 				comSize, S_ITEM_INFO, id, paramsLen, params.encode('utf-8')))
 		return SHORT_SIZE
-	
+
 	def cWearItem(self, data):
 		id = str(getShort(data, 0))
 		wear = getBool(data, SHORT_SIZE)
@@ -195,6 +192,7 @@ class Player:
 						self.params["beltWeapon"] = self.params["backpack"][id]
 					if place in places:
 						self.params["backpack"][id]["weared"] += 1
+					self.checkItemsProps()
 			else:
 				if weared > 0:
 					places = [1, 2, 3, 4]
@@ -208,6 +206,7 @@ class Player:
 						self.params["beltWeapon"] = 0
 					if place in places:
 						self.params["backpack"][id]["weared"] -= 1
+					self.checkItemsProps()
 		return SHORT_SIZE + BOOL_SIZE + CHAR_SIZE
 
 	def cDropItem(self, data):
@@ -231,32 +230,74 @@ class Player:
 				self.params["handWeapon"] = 0
 			elif place == PLACE_BELT_WEAPON:
 				self.params["beltWeapon"] = 0
+			if place:
+				self.checkItemsProps()
 		return SHORT_SIZE + CHAR_SIZE
 	
 	def cSellItem(self, data):
 		id = str(getShort(data, 0))
 		if id in self.params["backpack"]:
 			info = self.params["backpack"][id]
-			cost = info["cost"]
-			if self.params["money"] >= cost:
-				weared = info["weared"]
-				count = info["count"]
-				if weared == count:
-					info["weared"] -= 1
-					self.removeWearedItem(int(id))
-				info["count"] -= 1
-				if info["count"] == 0:
-					del self.params["backpack"][id]
-				self.params["money"] += cost
-				self.sClientMoney()
+			cost = info["cost"]			
+			weared = info["weared"]
+			count = info["count"]
+			if weared == count:
+				info["weared"] -= 1
+				self.removeWearedItem(int(id))
+				self.checkItemsProps()
+			info["count"] -= 1
+			if info["count"] == 0:
+				del self.params["backpack"][id]
+			self.params["money"] += cost
+			self.sClientMoney()
 		return SHORT_SIZE
-	
+
+	def cBuyItem(self, data):
+		id = str(getShort(data, 0))
+		# Достаем данные предмета
+		if self.cursor.execute("SELECT params FROM items WHERE id=" + id) == 1:
+			params = json.loads(self.cursor.fetchone()[0])
+			if self.params["money"] >= params["cost"]:
+				params["count"] = 1
+				params["weared"] = 0
+				self.addItem(params)
+				self.params["money"] -= params["cost"]
+				self.sClientMoney()
+				self.sAddItem(int(id), 1)
+		return SHORT_SIZE
+
+	# ==================================================================
+	# Прочие функции
+	# ==================================================================
 	def removeWearedItem(self, id):
 		places = ["armour", "pants", "handWeapon", "beltWeapon"]
 		for p in places:
 			if self.params[p] and self.params[p]["id"] == id:
 				self.params[p] = 0
 				break
+
+	# Подготовка параметров персонажа перед записью в базу
+	def reduceParams(self):
+		for id in self.params["backpack"]:
+			self.params["backpack"][id] = self.params["backpack"][id]["count"]
+		a = ["armour", "pants", "beltWeapon", "handWeapon"]
+		for n in a:
+			if self.params[n]:
+				self.params[n] = self.params[n]["id"]
+
+	def addItem(self, item):
+		id = str(item["id"])
+		if id in self.params["backpack"]:
+			self.params["backpack"][id]["count"] += 1
+		else:
+			self.params["backpack"][id] = item
+
+	def checkItemsProps(self):
+		self.params["resistance"] = 0
+		places = ["armour", "pants"]
+		for p in places:
+			if self.params[p]:
+				self.params["resistance"] += self.params[p]["resistance"]
 	
 # Функция принимающая сокет и ожидающая от клиента команды C_LOGIN
 # Фактически эта функция запускается в отдельном потоке и далее,

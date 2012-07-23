@@ -22,6 +22,8 @@ package control
 		public static const INIT_SHOP:String = "init_shop";
 		public static const SELL_ITEM:String = "sell_item";
 		public static const SEND_SELL_ITEM:String = "send_sell_item";
+		public static const SEND_BUY_ITEM:String = "send_buy_item";
+		public static const ADD_ITEM:String = "add_item";
 		
 		public var data:Object;
 		

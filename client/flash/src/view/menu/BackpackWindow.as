@@ -41,8 +41,38 @@ package view.menu
 		private function configureHandlers():void 
 		{
 			Dispatcher.instance.addEventListener(UserEvent.INIT_BACKPACK, initBackpack);
+			Dispatcher.instance.addEventListener(UserEvent.ADD_ITEM, addItem);
 			module.returnBtn.addEventListener(MouseEvent.CLICK, returnClickHandler);
 			addEventListener(Event.ADDED, addedHandler);
+		}
+		
+		private function addItem(e:UserEvent):void 
+		{
+			var id:String = String(e.data as int);
+			var info:Object = _model.params.backpack[id];
+			if (items[id])
+				(items[id] as Item_asset).tf.text = id + ") " + info.name + " (" + info.count + ")";
+			else
+			{
+				var item:Item_asset = new Item_asset();
+				item.tf.text = id + ") " + info.name + " (" + info.count + ")";
+				var counter:int = 0;
+				for (var i:String in items)
+					counter++;
+				item.y = counter * item.height;
+				module.items.addChild(item);
+				items[id] = item;
+				if (info.type == WEAPON || info.type == ARMOUR || info.type == PANTS)
+				{
+					item.drop.addEventListener(MouseEvent.CLICK, dropHandler);
+					item.wear.addEventListener(MouseEvent.CLICK, wearItem);
+					item.drop.id = item.wear.id = id;
+				}
+				else if (item.drop.visible)
+				{
+					item.drop.visible = item.wear.visible = false;
+				}
+			}
 		}
 		
 		private function addedHandler(e:Event = null):void 

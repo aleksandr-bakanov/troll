@@ -34,9 +34,32 @@ package view.menu
 		private function configureHandlers():void 
 		{
 			Dispatcher.instance.addEventListener(UserEvent.INIT_SHOP, initShop);
+			Dispatcher.instance.addEventListener(UserEvent.ADD_ITEM, addItem);
 			Dispatcher.instance.addEventListener(UserEvent.PARAMS_UPDATED, paramsUpdated);
 			module.returnBtn.addEventListener(MouseEvent.CLICK, returnClickHandler);
 			addEventListener(Event.ADDED, addedHandler);
+		}
+		
+		private function addItem(e:UserEvent):void 
+		{
+			var id:String = String(e.data as int);
+			var info:Object = _model.params.backpack[id];
+			if (backpack[id])
+				(backpack[id] as Shop_item_asset).tf.text = id + ") " + info.name + " (" + info.count + ")";
+			else
+			{
+				var item:Shop_item_asset = new Shop_item_asset();
+				item.tf.text = id + ") " + info.name + " (" + info.count + ")";
+				var counter:int = 0;
+				for (var i:String in backpack)
+					counter++;
+				item.y = counter * item.height;
+				// Вот тут три ссылки на item
+				module.backpack.addChild(item);
+				backpack[id] = item;
+				item.btn.addEventListener(MouseEvent.CLICK, sellItem);
+				item.btn.id = id;
+			}
 		}
 		
 		private function addedHandler(e:Event):void 
@@ -98,7 +121,9 @@ package view.menu
 		
 		private function buyItem(e:MouseEvent):void 
 		{
-			
+			var id:String = (e.currentTarget as Object).id as String;
+			if (_model.params.money >= MainModel.items[id].cost)
+				Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.SEND_BUY_ITEM, parseInt(id)));
 		}
 		
 		private function sellItem(e:MouseEvent):void 
