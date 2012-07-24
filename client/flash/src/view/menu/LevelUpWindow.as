@@ -62,6 +62,9 @@ package view.menu
 			var sign:int = n.indexOf("plus") == 0 ? 1 : -1;
 			var param:String = n.split("_")[1];
 			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.PARAM_CHANGED, { param:param, sign:sign } ));
+			var names:Array = ["strength", "dexterity", "intellect", "health"];
+			var stat:int = names.indexOf(param) + 1;
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.SEND_ADD_STAT, stat ));
 		}
 		
 	}

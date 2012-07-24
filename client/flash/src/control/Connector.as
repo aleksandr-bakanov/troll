@@ -36,6 +36,7 @@ package control
 		public static const C_DROP_ITEM:int = 10;
 		public static const C_BUY_ITEM:int = 12;
 		public static const C_SELL_ITEM:int = 14;
+		public static const C_ADD_STAT:int = 16;
 		
 		private var _socket:Socket;
 		private var _lastComSize:int;
@@ -62,6 +63,7 @@ package control
 			Dispatcher.instance.addEventListener(UserEvent.SEND_DROP_ITEM, cDropItem);
 			Dispatcher.instance.addEventListener(UserEvent.SEND_SELL_ITEM, cSellItem);
 			Dispatcher.instance.addEventListener(UserEvent.SEND_BUY_ITEM, cBuyItem);
+			Dispatcher.instance.addEventListener(UserEvent.SEND_ADD_STAT, cAddStat);
 		}
 		
 		private function configureSocket():void
@@ -309,6 +311,14 @@ package control
 			_socket.writeInt(4);
 			_socket.writeShort(C_BUY_ITEM);
 			_socket.writeShort(e.data as int);
+			_socket.flush();
+		}
+		
+		private function cAddStat(e:UserEvent):void 
+		{
+			_socket.writeInt(3);
+			_socket.writeShort(C_ADD_STAT);
+			_socket.writeByte(e.data as int);
 			_socket.flush();
 		}
 

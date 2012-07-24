@@ -12,7 +12,14 @@ import MySQLdb
 import json
 # Регулярные выражения
 import re
+# Импортируем пользовательские исключения
+from userexc import UserExc
 
+# ======================================================================
+#
+#  Класс обеспечивающий общение с клиентом.
+#
+# ======================================================================
 class Player:
 	def __init__(self, id, name, params, socket, db):
 		self.id = id
@@ -22,25 +29,10 @@ class Player:
 		self.db = db
 		self.cursor = db.cursor()
 		self.initBackpack()
-	
-	# Функция инициализации рюкзака
-	def initBackpack(self):
-		for id in self.params["backpack"]:
-			count = self.params["backpack"][id]
-			self.cursor.execute("SELECT params FROM items WHERE id=" + id)
-			params = json.loads(self.cursor.fetchone()[0])
-			params["count"] = count
-			params["weared"] = 0
-			self.params["backpack"][id] = params
-		a = ["armour", "pants", "beltWeapon", "handWeapon"]
-		for n in a:
-			if self.params[n] == 0:
-				continue
-			params = self.params["backpack"][str(self.params[n])]
-			params["weared"] += 1
-			self.params[n] = params
-		self.checkItemsProps()
-	
+
+	# ==================================================================
+	# Две основные функции run и parse
+	# ==================================================================
 	# Функция запускает цикл в ожидании команд от клиента.
 	# После прихода очередной команды запускает parse.
 	def run(self):
@@ -62,15 +54,21 @@ class Player:
 			if not commandLen:
 				if len(chunk) >= INT_SIZE:
 					commandLen = getInt(chunk, 0)
-					if commandLen == 0:
+					if commandLen <= 0:
 						break
 					if len(data) - INT_SIZE >= commandLen:
-						ob = self.parse(data)
+						try:
+							ob = self.parse(data)
+						except UserExc:
+							break
 						data = data[ob:]
 				else:
 					continue
-			elif len(data) + len(chunk) - INT_SIZE >= commandLen:
-				ob = self.parse(data)
+			elif len(data) - INT_SIZE >= commandLen:
+				try:
+					ob = self.parse(data)
+				except UserExc:
+					break
 				data = data[ob:]
 			else:
 				continue
@@ -92,6 +90,9 @@ class Player:
 		while currentBytes >= INT_SIZE:
 			# Читаем длину команды
 			comSize = getInt(data, operatedBytes)
+			# Гоним в шею шутников
+			if comSize <= 0:
+				raise UserExc()
 			operatedBytes += INT_SIZE
 			# Если оставшегося куска сообщения хватает, чтобы запустить
 			# его на парсинг, запускаем
@@ -111,6 +112,8 @@ class Player:
 					operatedBytes += self.cSellItem(data[operatedBytes:])
 				elif comId == C_BUY_ITEM:
 					operatedBytes += self.cBuyItem(data[operatedBytes:])
+				elif comId == C_ADD_STAT:
+					operatedBytes += self.cAddStat(data[operatedBytes:])
 				# После обработки одной команды смотрим, есть ли еще
 				# что обработать.
 				# Если мы обработали все байты, переданные нам, возвращаем
@@ -124,15 +127,16 @@ class Player:
 			# Иначе мы должны сделать вид, что очередную команду мы
 			# и не пытались обработать, и вообще тут не при чем.
 			else:
-				operatedBytes -= INT_SIZE
-				return operatedBytes
+				return operatedBytes - INT_SIZE
 	
 	# ==================================================================
 	# Функции отправки команд клиенту
 	# ==================================================================
 	def sLoginSuccess(self):
 		self.socket.sendall(pack('<ih', 2, S_LOGIN_SUCCESS))
-	
+
+	# Функция отправляет клиенту уже развернутые параметры персонажа.
+	# В связи с этим потребность в команде S_ITEM_INFO может отпасть.
 	def sFullParams(self):
 		nameLen = len(self.name)
 		paramsJSON = json.dumps(self.params)
@@ -140,7 +144,11 @@ class Player:
 		comSize = SHORT_SIZE * 3 + INT_SIZE + nameLen + paramsLen
 		self.socket.sendall(pack('<ihih' + str(nameLen) + 'sh' + str(paramsLen) + 's',
 			comSize, S_FULL_PARAMS, self.id, nameLen, self.name, paramsLen, paramsJSON))
-	
+
+	# Функция отправляет клиенту всю таблицу items в json, чтобы у него
+	# была информация о всех возможных предметах, которую он мог бы
+	# просмотреть в магазине. Отправка этой команды еще раз ставит под
+	# сомнение целесообразность команды S_ITEM_INFO.
 	def sShopItems(self):
 		self.cursor.execute("SELECT * FROM items")
 		data = self.cursor.fetchall()
@@ -152,16 +160,22 @@ class Player:
 		comSize = SHORT_SIZE * 2 + itemsLen
 		self.socket.sendall(pack('<ihh' + str(itemsLen) + 's',
 			comSize, S_SHOP_ITEMS, itemsLen, items))
-	
+
+	# Функция сообщает игроку сколько у него денег.
 	def sClientMoney(self):
 		self.socket.sendall(pack('<ihi', 3, S_CLIENT_MONEY, self.params["money"]))
 
+	# Функция извещает игрока о добавлении в рюкзак предмета с указанным
+	# id, в указанном количестве.
 	def sAddItem(self, id, count):
 		self.socket.sendall(pack('<ihhb', 5, S_ADD_ITEM, id, count))
 
 	# ==================================================================
 	# Функции-обработчики команд клиента
 	# ==================================================================
+	# Функция возвращает клиенту параметры предмета с запрошенным id.
+	# Если в базе нет предмета с таким id, сервер никак не отвечает
+	# на данный запрос.
 	def cItemInfo(self, data):
 		id = getShort(data, 0)
 		if self.cursor.execute("SELECT params FROM items WHERE id=" + str(id)) == 1:
@@ -172,13 +186,16 @@ class Player:
 				comSize, S_ITEM_INFO, id, paramsLen, params.encode('utf-8')))
 		return SHORT_SIZE
 
+	# Функция обрабатывает запрос клиента на одевание / снятие предмета.
+	# Если предмета с запрошенным id нет в рюкзаке, сервер игнорирует
+	# запрос.
 	def cWearItem(self, data):
 		id = str(getShort(data, 0))
 		wear = getBool(data, SHORT_SIZE)
 		place = getChar(data, SHORT_SIZE + BOOL_SIZE)
-		weared = self.params["backpack"][id]["weared"]
-		count = self.params["backpack"][id]["count"]
 		if id in self.params["backpack"]:
+			weared = self.params["backpack"][id]["weared"]
+			count = self.params["backpack"][id]["count"]
 			if wear:
 				if weared < count:
 					places = [1, 2, 3, 4]
@@ -209,6 +226,10 @@ class Player:
 					self.checkItemsProps()
 		return SHORT_SIZE + BOOL_SIZE + CHAR_SIZE
 
+	# Функция выполняет запрос клиента на выбрасывание предмета из
+	# рюкзака. Если предмета с запрошенным id нет в рюкзаке, сервер
+	# игнорирует запрос. Если предмет был одет, соответствующая ячейка
+	# инвентаря освобождается.
 	def cDropItem(self, data):
 		id = str(getShort(data, 0))
 		place = getChar(data, SHORT_SIZE)
@@ -233,7 +254,10 @@ class Player:
 			if place:
 				self.checkItemsProps()
 		return SHORT_SIZE + CHAR_SIZE
-	
+
+	# Функция выполняет запрос клиента на продажу предмета.
+	# Если предмета с запрошенным id нет в рюкзаке, сервер игнорирует
+	# запрос.
 	def cSellItem(self, data):
 		id = str(getShort(data, 0))
 		if id in self.params["backpack"]:
@@ -252,9 +276,11 @@ class Player:
 			self.sClientMoney()
 		return SHORT_SIZE
 
+	# Функция выполняет запрос клиента на покупку предмета.
+	# Если предмета с запрошенным id нет в базе, сервер игнорирует
+	# запрос. Если у игрока не хватает денег, запрос также игнорируется.
 	def cBuyItem(self, data):
 		id = str(getShort(data, 0))
-		# Достаем данные предмета
 		if self.cursor.execute("SELECT params FROM items WHERE id=" + id) == 1:
 			params = json.loads(self.cursor.fetchone()[0])
 			if self.params["money"] >= params["cost"]:
@@ -266,9 +292,51 @@ class Player:
 				self.sAddItem(int(id), 1)
 		return SHORT_SIZE
 
+	# Функция выполняет запрос клиента на увеличение одного из базовых
+	# статов на единицу
+	def cAddStat(self, data):
+		stat = getChar(data, 0)
+		if stat > 0 and stat < 5:
+			names = ["strength", "dexterity", "intellect", "health"]
+			s = names[stat - 1]
+			cost = 0
+			if stat == 1 or stat == 4:
+				cost = 10
+			else:
+				cost = 20
+			if self.params["unusedOP"] >= cost:
+				self.params["unusedOP"] -= cost
+				self.params["usedOP"] += cost
+				self.params[s] += 1
+				self.recalculateParams()
+		return CHAR_SIZE
+
 	# ==================================================================
 	# Прочие функции
 	# ==================================================================
+	# Функция инициализации рюкзака. Функция разворачивает запись
+	# рюкзака, извлеченную из базы. То же происходит с ячейками
+	# инвентаря.
+	def initBackpack(self):
+		for id in self.params["backpack"]:
+			count = self.params["backpack"][id]
+			self.cursor.execute("SELECT params FROM items WHERE id=" + id)
+			params = json.loads(self.cursor.fetchone()[0])
+			params["count"] = count
+			params["weared"] = 0
+			self.params["backpack"][id] = params
+		a = ["armour", "pants", "beltWeapon", "handWeapon"]
+		for n in a:
+			if self.params[n] == 0:
+				continue
+			params = self.params["backpack"][str(self.params[n])]
+			params["weared"] += 1
+			self.params[n] = params
+		self.checkItemsProps()
+
+	# Функция удаляет из ячейки инвентаря персонажа первый попавшийся
+	# предмет, id которого совпадает с запрашиваемым id. Порядок
+	# удаления указан в списке places.
 	def removeWearedItem(self, id):
 		places = ["armour", "pants", "handWeapon", "beltWeapon"]
 		for p in places:
@@ -276,15 +344,23 @@ class Player:
 				self.params[p] = 0
 				break
 
-	# Подготовка параметров персонажа перед записью в базу
+	# Подготовка параметров персонажа перед записью в базу. Чтобы не
+	# хранить в базе развернутый backpack, он сворачивается до вида
+	# {"id":count, "id":count, ... }. Развернутые ячейки инвентаря
+	# заменяются на id предмета, лежащих в них.
 	def reduceParams(self):
 		for id in self.params["backpack"]:
 			self.params["backpack"][id] = self.params["backpack"][id]["count"]
-		a = ["armour", "pants", "beltWeapon", "handWeapon"]
-		for n in a:
-			if self.params[n]:
-				self.params[n] = self.params[n]["id"]
+		places = ["armour", "pants", "beltWeapon", "handWeapon"]
+		for p in places:
+			if self.params[p]:
+				self.params[p] = self.params[p]["id"]
 
+	# Функция добавляет в рюкзак предмет. Если в рюкзаке уже имеются
+	# предметы с таким id, то их количество увеличивается на единицу.
+	# Иначе в рюкзаке создается новая запись. Параметр item суть
+	# объект хранимый в json в таблице items, с добавлением свойств
+	# count и weared.
 	def addItem(self, item):
 		id = str(item["id"])
 		if id in self.params["backpack"]:
@@ -292,13 +368,33 @@ class Player:
 		else:
 			self.params["backpack"][id] = item
 
+	# Функция пересчитывает сопротивляемость игрока исходя из предметов,
+	# одетых в ячейках "armour" и "pants".
 	def checkItemsProps(self):
 		self.params["resistance"] = 0
 		places = ["armour", "pants"]
 		for p in places:
 			if self.params[p]:
 				self.params["resistance"] += self.params[p]["resistance"]
-	
+
+	# Функция пересчета вторичных параметров игрока на основе первичных
+	def recalculateParams(self):
+		strength = self.params["strength"]
+		dexterity = self.params["dexterity"]
+		intellect = self.params["intellect"]
+		health = self.params["health"]
+		speed = (dexterity + health) / 4.0
+		self.params["speed"] = speed
+		self.params["hitPoints"] = health
+		self.params["deviation"] = int(speed) + 3
+		self.params["maxLoad"] = int((strength * strength) / 5.0)
+		self.params["actPoints"] = int(speed)
+
+# ======================================================================
+#
+#  Функции, с которых начинается выполнение треда.
+#
+# ======================================================================
 # Функция принимающая сокет и ожидающая от клиента команды C_LOGIN
 # Фактически эта функция запускается в отдельном потоке и далее,
 # если клиент прислал верную пару логин/пароль, создается объект
@@ -328,22 +424,24 @@ def run (socket):
 				# Читаем длину сообщения
 				commandLen = getInt(chunk, 0)
 				# Если какой-то шутник прислал '\x00\x00\x00\x00', уходим
-				if commandLen == 0:
+				if commandLen <= 0:
 					socket.close()
 					return
 				# Если сообщение пришло целиком, отправляемся на парсинг
 				if len(data) - INT_SIZE >= commandLen:
-					result = parse(data, socket, db)
-					if result < 0:
+					try:
+						result = parse(data, socket, db)
+					except UserExc:
 						break
 			# Иначе, ждем еще байтов
 			else:
 				continue
 		# Иначе, если нам уже известна длина сообщения, значит мы ждали
 		# недостающих кусков. Нужно проверить хватает ли байтов теперь.
-		elif len(data) + len(chunk) - INT_SIZE >= commandLen:
-			result = parse(data, socket, db)
-			if result < 0:
+		elif len(data) - INT_SIZE >= commandLen:
+			try:
+				result = parse(data, socket, db)
+			except UserExc:
 				break
 		# Иначе нам снова не хватает байтов и мы продолжаем ждать
 		else:
@@ -359,18 +457,14 @@ def parse(data, socket, db):
 	if comId == C_LOGIN:
 		pos = 6
 		login = getUTF(data, pos)
-		if login < 0:
-			return -1
 		utfLogin = login.decode('utf-8')
 		if len(utfLogin) > 16:
-			return -9
+			raise UserExc()
 		pos += 2 + len(login)
 		password = getUTF(data, pos)
-		if password < 0:
-			return -2
 		utfPassword = password.decode('utf-8')
 		if len(utfPassword) != 32:
-			return -10
+			raise UserExc()
 		# Окей, есть логин и пароль. Проверим существует ли такой
 		# игрок и не играет ли он уже.
 		cursor = db.cursor()
@@ -381,13 +475,13 @@ def parse(data, socket, db):
 		# в базе данных нет.
 		if not rc:
 			socket.sendall(pack('<ihb', 3, S_LOGIN_FAILURE, 1))
-			return 3
+			return
 		# Достаем данные
 		data = cursor.fetchall()[0]
 		# Если кто-то уже играет под этим логином, уходим
 		if data[1] == 1:
 			socket.sendall(pack('<ihb', 3, S_LOGIN_FAILURE, 2))
-			return 4
+			return
 		# А если нет, отмечаем что данный логин уже занят
 		cursor.execute("UPDATE user SET is_playing=1 WHERE id=" + str(data[0]))
 		db.commit()
@@ -397,23 +491,21 @@ def parse(data, socket, db):
 		# Запускаем обработку данных игроком
 		player.run()
 		del player
-		return -1
+		raise UserExc()
 	elif comId == C_REGISTER:
 		## TODO: Проверить login на SQL-инъекции
 		pos = 6
 		login = getUTF(data, pos)
-		if login < 0:
-			return -3
 		utfLogin = login.decode('utf-8')
 		if len(utfLogin) > 16:
-			return -4
+			raise UserExc()
 		# Проверяем свободен ли логин
 		cursor = db.cursor()
 		cursor.execute("SELECT id FROM user WHERE login='" + login + "'")
 		if cursor.rowcount > 0:
 			cursor.close()
 			socket.sendall(pack('<ihb', 3, S_REGISTER_FAILURE, 1))
-			return 5
+			return
 		cursor.close()
 		# Проверим логин регуляркой
 		## TODO: повнимательней отнестить к регулярному выражению
@@ -421,15 +513,13 @@ def parse(data, socket, db):
 		res = re.findall(u'[a-zA-Zа-яА-ЯЁё]+[a-zA-Zа-яА-Я0-9Ёё]*', login, re.U)
 		if res == None or (len(res) > 0 and len(login) != len(res[0])):
 			socket.sendall(pack('<ihb', 3, S_REGISTER_FAILURE, 2))
-			return 6
+			return
 		# Конец черной магии
 		pos += 2 + len(login)
 		password = getUTF(data, pos)
-		if password < 0:
-			return -5
 		utfPassword = password.decode('utf-8')
 		if len(utfPassword) != 32:
-			return -6
+			raise UserExc()
 		pos += 2 + len(password)
 		# Вычитываем статы персонажа
 		strength = getChar(data, pos)
@@ -441,13 +531,13 @@ def parse(data, socket, db):
 		health = getChar(data, pos)
 		# Проверяем присланные данные
 		if strength < 10 or dexterity < 10 or intellect < 10 or health < 10:
-			return -7
+			raise UserExc()
 		usedOP = (strength - 10) * 10
 		usedOP += (dexterity - 10) * 20
 		usedOP += (intellect - 10) * 20
 		usedOP += (health - 10) * 10
 		if usedOP > 50:
-			return -8
+			raise UserExc()
 		speed = (dexterity + health) / 4.0
 		params = {
 			"strength":strength,
@@ -487,6 +577,6 @@ def parse(data, socket, db):
 		# Запускаем обработку данных игроком
 		player.run()
 		del player
-		return -1
+		raise UserExc()
 	else:
 		return 0

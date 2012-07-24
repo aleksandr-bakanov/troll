@@ -24,6 +24,7 @@ package control
 		public static const SEND_SELL_ITEM:String = "send_sell_item";
 		public static const SEND_BUY_ITEM:String = "send_buy_item";
 		public static const ADD_ITEM:String = "add_item";
+		public static const SEND_ADD_STAT:String = "send_add_stat";
 		
 		public var data:Object;
 		

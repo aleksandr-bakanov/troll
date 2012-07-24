@@ -76,7 +76,7 @@ package view
 			_loginWindow = new LoginWindow();
 			_windows[LOGIN_WINDOW] = _loginWindow;
 			addChild(_loginWindow);
-			_registrationWindow = new RegistrationWindow();
+			_registrationWindow = new RegistrationWindow(_model);
 			_windows[REGISTRATION_WINDOW] = _registrationWindow;
 			_mainWindow = new MainWindow();
 			_windows[MAIN_WINDOW] = _mainWindow;

@@ -4,6 +4,7 @@ package view.menu
 	import control.UserEvent;
 	import flash.display.Sprite;
 	import flash.events.MouseEvent;
+	import model.MainModel;
 	
 	/**
 	 * Окно создания аккаунта
@@ -13,13 +14,16 @@ package view.menu
 	{
 		public static const LOGIN_REGEXP:RegExp = /[a-zA-Zа-яА-ЯЁё]+[a-zA-Zа-яА-Я0-9Ёё]*/;
 		public var module:RegistrationWindow_asset;
+		private var _model:MainModel;
 		
-		public function RegistrationWindow() 
+		public function RegistrationWindow(model:MainModel) 
 		{
+			_model = model;
 			module = new RegistrationWindow_asset();
 			module.login.restrict = "0-9a-zA-Zа-яА-ЯЁё";
 			addChild(module);
 			configureHandlers();
+			paramsUpdated();
 		}
 		
 		private function configureHandlers():void 
@@ -47,17 +51,17 @@ package view.menu
 			}
 		}
 		
-		private function paramsUpdated(e:UserEvent):void 
+		private function paramsUpdated(e:UserEvent = null):void 
 		{
-			module.rest.text = e.data.unusedOP.toString();
-			module.strength.text = e.data.strength.toString();
-			module.dexterity.text = e.data.dexterity.toString();
-			module.intellect.text = e.data.intellect.toString();
-			module.health.text = e.data.health.toString();
-			module.speed.text = e.data.speed.toFixed(1);
-			module.hitPoints.text = e.data.hitPoints.toString();
-			module.deviation.text = e.data.deviation.toString();
-			module.maxLoad.text = e.data.maxLoad.toString();
+			module.rest.text = _model.params.unusedOP.toString();
+			module.strength.text = _model.params.strength.toString();
+			module.dexterity.text = _model.params.dexterity.toString();
+			module.intellect.text = _model.params.intellect.toString();
+			module.health.text = _model.params.health.toString();
+			module.speed.text = _model.params.speed.toFixed(1);
+			module.hitPoints.text = _model.params.hitPoints.toString();
+			module.deviation.text = _model.params.deviation.toString();
+			module.maxLoad.text = _model.params.maxLoad.toString();
 		}
 		
 		private function paramChange(e:MouseEvent):void 
