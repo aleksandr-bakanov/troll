@@ -74,8 +74,8 @@ class Player:
 				continue
 		# Уходя, обновляем is_playing в базе и закрываем с ней соединение
 		self.reduceParams()
-		self.cursor.execute("UPDATE user SET is_playing=0, params='" +
-			json.dumps(self.params) + "' WHERE id=" + str(self.id))
+		self.cursor.execute("UPDATE user SET is_playing=0," +
+		" params=%s WHERE id=%s", (json.dumps(self.params), self.id))
 		self.db.commit()
 		self.cursor.close()
 		print 'Player "' + self.name + '" is gone.'
@@ -178,7 +178,7 @@ class Player:
 	# на данный запрос.
 	def cItemInfo(self, data):
 		id = getShort(data, 0)
-		if self.cursor.execute("SELECT params FROM items WHERE id=" + str(id)) == 1:
+		if self.cursor.execute("SELECT params FROM items WHERE id=%s", (id,)) == 1:
 			params = unicode(self.cursor.fetchone()[0])
 			paramsLen = len(params.encode('utf-8'))
 			comSize = SHORT_SIZE * 3 + paramsLen
@@ -281,7 +281,7 @@ class Player:
 	# запрос. Если у игрока не хватает денег, запрос также игнорируется.
 	def cBuyItem(self, data):
 		id = str(getShort(data, 0))
-		if self.cursor.execute("SELECT params FROM items WHERE id=" + id) == 1:
+		if self.cursor.execute("SELECT params FROM items WHERE id=%s", (id,)) == 1:
 			params = json.loads(self.cursor.fetchone()[0])
 			if self.params["money"] >= params["cost"]:
 				params["count"] = 1
@@ -320,7 +320,7 @@ class Player:
 	def initBackpack(self):
 		for id in self.params["backpack"]:
 			count = self.params["backpack"][id]
-			self.cursor.execute("SELECT params FROM items WHERE id=" + id)
+			self.cursor.execute("SELECT params FROM items WHERE id=%s", (id,))
 			params = json.loads(self.cursor.fetchone()[0])
 			params["count"] = count
 			params["weared"] = 0
@@ -469,8 +469,8 @@ def parse(data, socket, db):
 		# игрок и не играет ли он уже.
 		cursor = db.cursor()
 		# выполняем запрос
-		rc = cursor.execute("SELECT id, is_playing, params FROM user WHERE login='" + login +
-		"' AND password='" + password + "'")
+		rc = cursor.execute("SELECT id, is_playing, params FROM user" +
+		" WHERE login=%s AND password=%s", (login, password))
 		# Если rc (rows count) == 0, значит такой пары логин/пароль
 		# в базе данных нет.
 		if not rc:
@@ -483,7 +483,7 @@ def parse(data, socket, db):
 			socket.sendall(pack('<ihb', 3, S_LOGIN_FAILURE, 2))
 			return
 		# А если нет, отмечаем что данный логин уже занят
-		cursor.execute("UPDATE user SET is_playing=1 WHERE id=" + str(data[0]))
+		cursor.execute("UPDATE user SET is_playing=1 WHERE id=%s", (data[0],))
 		db.commit()
 		cursor.close()
 		# Создаем объект Player и передаем ему данные
@@ -493,7 +493,6 @@ def parse(data, socket, db):
 		del player
 		raise UserExc()
 	elif comId == C_REGISTER:
-		## TODO: Проверить login на SQL-инъекции
 		pos = 6
 		login = getUTF(data, pos)
 		utfLogin = login.decode('utf-8')
@@ -501,14 +500,13 @@ def parse(data, socket, db):
 			raise UserExc()
 		# Проверяем свободен ли логин
 		cursor = db.cursor()
-		cursor.execute("SELECT id FROM user WHERE login='" + login + "'")
+		cursor.execute("SELECT id FROM user WHERE login=%s", (login,))
 		if cursor.rowcount > 0:
 			cursor.close()
 			socket.sendall(pack('<ihb', 3, S_REGISTER_FAILURE, 1))
 			return
 		cursor.close()
 		# Проверим логин регуляркой
-		## TODO: повнимательней отнестить к регулярному выражению
 		# Черная магия!
 		res = re.findall(u'[a-zA-Zа-яА-ЯЁё]+[a-zA-Zа-яА-Я0-9Ёё]*', login, re.U)
 		if res == None or (len(res) > 0 and len(login) != len(res[0])):
@@ -564,7 +562,7 @@ def parse(data, socket, db):
 		# Создаем запись в базе данных
 		cursor = db.cursor()
 		cursor.execute("INSERT INTO user (id, login, password, is_playing, params)" +
-			"VALUES (NULL, '" + login + "', '" + password + "', '1', '" + json.dumps(params) + "')")
+			"VALUES (NULL, %s, %s, '1', %s)", (login, password, json.dumps(params)))
 		db.commit()
 		# Вытаскиваем id игрока
 		cursor.execute("SELECT id FROM user WHERE login='" + login + "'")
