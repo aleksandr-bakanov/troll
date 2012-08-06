@@ -18,6 +18,10 @@ db.commit()
 c.close()
 db.close()
 
+# Создаем контроллер заявок.
+import src.bidsController
+bids = src.bidsController.BidsController()
+
 # Создаем сервер и слушаем подключение клиентов
 import socket
 HOST = ''
@@ -31,7 +35,7 @@ while 1:
 	conn, addr = server.accept()
 	# После подключения клиента создаем поток, в котором и будет
 	# происходить общение с клиентом.
-	t = threading.Thread(target=run, args=(conn,))
+	t = threading.Thread(target=run, args=(conn, bids))
 	t.start()
 	# В C++ (POSIX thread libraries) есть еще функция pthread_detach(),
 	# которая "put a running thread in the detached state", т.е. при

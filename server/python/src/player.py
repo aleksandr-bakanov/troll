@@ -4,6 +4,7 @@ from consts import *
 # Для парсинга данных пользуемся struct
 from bc import *
 from struct import *
+import threading
 
 
 # Поиграемся с MySQL
@@ -15,19 +16,26 @@ import re
 # Импортируем пользовательские исключения
 from userexc import UserExc
 
+# Список всех игроков
+players = []
+# Мьютекс для общения с этим списком
+playersLock = threading.Lock()
+
 # ======================================================================
 #
 #  Класс обеспечивающий общение с клиентом.
 #
 # ======================================================================
 class Player:
-	def __init__(self, id, name, params, socket, db):
+	def __init__(self, id, name, params, socket, db, bids):
 		self.id = id
 		self.name = name
 		self.params = json.loads(params)
 		self.socket = socket
 		self.db = db
 		self.cursor = db.cursor()
+		self.bids = bids
+		self.addSelfInPlayers()
 		self.initBackpack()
 
 	# ==================================================================
@@ -78,6 +86,8 @@ class Player:
 		" params=%s WHERE id=%s", (json.dumps(self.params), self.id))
 		self.db.commit()
 		self.cursor.close()
+		# Не забываем удалиться из списка игроков
+		self.deleteSelfFromPlayers()
 		print 'Player "' + self.name + '" is gone.'
 	
 	# Функция возвращает количество обработанных байт
@@ -390,6 +400,34 @@ class Player:
 		self.params["maxLoad"] = int((strength * strength) / 5.0)
 		self.params["actPoints"] = int(speed)
 
+	# Функция ищет свободное место в списке и возвращает индекс этого
+	# места. Свободное место - занятое None.
+	def findEmptyPlace(self, places):
+		id = 0
+		for place in places:
+			if not place:
+				break
+			else:
+				id += 1
+		return id
+
+	# Функция добавления себя в список игроков
+	def addSelfInPlayers(self):
+		playersLock.acquire()
+		place = self.findEmptyPlace(players)
+		if place == len(players):
+			players.append(self)
+		else:
+			players[place] = self
+		self.placeInPlayers = place
+		playersLock.release()
+
+	# Функция удаления себя из списка игроков
+	def deleteSelfFromPlayers(self):
+		playersLock.acquire()
+		players[self.placeInPlayers] = None
+		playersLock.release()
+
 # ======================================================================
 #
 #  Функции, с которых начинается выполнение треда.
@@ -400,7 +438,7 @@ class Player:
 # если клиент прислал верную пару логин/пароль, создается объект
 # Player, который и обрабатывает дальнейшие команды, поступающие
 # от клиента.
-def run (socket):
+def run (socket, bids):
 	# Вот к нам подключился пользователь.
 	# Пока будем ждать от него только команды C_LOGIN, так как если бы
 	# он уже существовал в базе данных.
@@ -430,7 +468,7 @@ def run (socket):
 				# Если сообщение пришло целиком, отправляемся на парсинг
 				if len(data) - INT_SIZE >= commandLen:
 					try:
-						result = parse(data, socket, db)
+						result = parse(data, socket, db, bids)
 					except UserExc:
 						break
 			# Иначе, ждем еще байтов
@@ -440,7 +478,7 @@ def run (socket):
 		# недостающих кусков. Нужно проверить хватает ли байтов теперь.
 		elif len(data) - INT_SIZE >= commandLen:
 			try:
-				result = parse(data, socket, db)
+				result = parse(data, socket, db, bids)
 			except UserExc:
 				break
 		# Иначе нам снова не хватает байтов и мы продолжаем ждать
@@ -451,7 +489,7 @@ def run (socket):
 	socket.close()
 
 # Какой-никакой, а parse
-def parse(data, socket, db):
+def parse(data, socket, db, bids):
 	# Читаем id команды
 	comId = getShort(data, 4)
 	if comId == C_LOGIN:
@@ -487,7 +525,7 @@ def parse(data, socket, db):
 		db.commit()
 		cursor.close()
 		# Создаем объект Player и передаем ему данные
-		player = Player(data[0], login, data[2], socket, db)
+		player = Player(data[0], login, data[2], socket, db, bids)
 		# Запускаем обработку данных игроком
 		player.run()
 		del player
@@ -571,7 +609,7 @@ def parse(data, socket, db):
 		# Отсылаем сообщение об успешной авторизации
 		socket.sendall(pack('<ih', 2, S_REGISTER_SUCCESS))
 		# Создаем объект Player и передаем ему данные
-		player = Player(data[0], login, json.dumps(params), socket, db)
+		player = Player(data[0], login, json.dumps(params), socket, db, bids)
 		# Запускаем обработку данных игроком
 		player.run()
 		del player
