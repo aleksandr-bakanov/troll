@@ -35,6 +35,7 @@ class Player:
 		self.db = db
 		self.cursor = db.cursor()
 		self.bids = bids
+		self.bidId = -1
 		self.addSelfInPlayers()
 		self.initBackpack()
 
@@ -124,6 +125,10 @@ class Player:
 					operatedBytes += self.cBuyItem(data[operatedBytes:])
 				elif comId == C_ADD_STAT:
 					operatedBytes += self.cAddStat(data[operatedBytes:])
+				elif comId == C_ENTER_BID:
+					operatedBytes += self.cEnterBid(data[operatedBytes:])
+				elif comId == C_EXIT_BID:
+					operatedBytes += self.cExitBid(data[operatedBytes:])
 				# После обработки одной команды смотрим, есть ли еще
 				# что обработать.
 				# Если мы обработали все байты, переданные нам, возвращаем
@@ -179,6 +184,14 @@ class Player:
 	# id, в указанном количестве.
 	def sAddItem(self, id, count):
 		self.socket.sendall(pack('<ihhb', 5, S_ADD_ITEM, id, count))
+
+	# Функция извещает игрока о появлении новой заявки.
+	def sNewBid(self, id, op, count):
+		self.socket.sendall(pack('<ihhhb', 7, S_NEW_BID, id, op, count))
+
+	# Функция извещает игрока об удалении заявки.
+	def sRemoveBid(self, id):
+		self.socket.sendall(pack('<ihh', 4, S_REMOVE_BID, id))
 
 	# ==================================================================
 	# Функции-обработчики команд клиента
@@ -319,6 +332,23 @@ class Player:
 				self.params["usedOP"] += cost
 				self.params[s] += 1
 				self.recalculateParams()
+		return CHAR_SIZE
+
+	# Функция выполняет запрос клиента на вступление в заявку.
+	def cEnterBid(self, data):
+		id = getShort(data, 0)
+		bids.addPlayerToBid(id, self)
+		return SHORT_SIZE
+
+	# Функция выполняет запрос клиента на выход из заявки.
+	def cExitBid(self, data):
+		bids.removePlayerFromBid(self.bidId, self)
+		return 0
+
+	def cCreateBid(self, data):
+		count = getChar(data, 0)
+		if count >= 1 and count <= 6:
+			bids.createBid(self, self.params["usedOP"], count)
 		return CHAR_SIZE
 
 	# ==================================================================

@@ -1,6 +1,10 @@
 # coding=utf-8
 import threading
+# ======================================================================
+#
 # Класс заявки
+#
+# ======================================================================
 class Bid:
 	# @param op		ОП создателя заявки
 	# @param cb		callback (timer end function)
@@ -9,6 +13,9 @@ class Bid:
 		self.id = id
 		self.op = op
 		self.cb = cb
+		self.count = count
+		self.players = []
+		self.curcount = 0
 		self.startTimer()
 
 	def startTimer(self):
@@ -18,3 +25,35 @@ class Bid:
 	def stopTimer(self):
 		if self.t.is_alive():
 			self.t.cancel()
+
+	def addPlayer(self, player):
+		id = self.findEmptyPlace(players)
+		if id == len(players):
+			players.append(player)
+		else:
+			players[id] = player
+		self.curcount += 1
+		player.bidId = self.id
+		if self.curcount == self.count:
+			self.t.cancel()
+			self.cb(self.id)
+
+	def removePlayer(self, player):
+		id = 0
+		for p in players:
+			if p == player:
+				player.bidId = -1
+				players[id] = None
+				self.curcount -= 1
+				break
+			id += 1
+
+	# Поиск свободного места в списке holder
+	def findEmptyPlace(self, holder):
+		id = 0
+		for place in holder:
+			if not place:
+				break
+			else:
+				id += 1
+		return id
