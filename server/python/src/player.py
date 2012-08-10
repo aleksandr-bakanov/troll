@@ -38,6 +38,7 @@ class Player:
 		self.bidId = -1
 		self.addSelfInPlayers()
 		self.initBackpack()
+		self.sendBidsList()
 
 	# ==================================================================
 	# Две основные функции run и parse
@@ -129,6 +130,8 @@ class Player:
 					operatedBytes += self.cEnterBid(data[operatedBytes:])
 				elif comId == C_EXIT_BID:
 					operatedBytes += self.cExitBid(data[operatedBytes:])
+				elif comId == C_CREATE_BID:
+					operatedBytes += self.cCreateBid(data[operatedBytes:])
 				# После обработки одной команды смотрим, есть ли еще
 				# что обработать.
 				# Если мы обработали все байты, переданные нам, возвращаем
@@ -186,12 +189,16 @@ class Player:
 		self.socket.sendall(pack('<ihhb', 5, S_ADD_ITEM, id, count))
 
 	# Функция извещает игрока о появлении новой заявки.
-	def sNewBid(self, id, op, count):
-		self.socket.sendall(pack('<ihhhb', 7, S_NEW_BID, id, op, count))
+	def sNewBid(self, id, op, count, curcount):
+		self.socket.sendall(pack('<ihhhbb', 8, S_NEW_BID, id, op, count, curcount))
 
 	# Функция извещает игрока об удалении заявки.
 	def sRemoveBid(self, id):
 		self.socket.sendall(pack('<ihh', 4, S_REMOVE_BID, id))
+
+	# Функция извещает игрока об обновлении состояния заявки.
+	def sUpdateBid(self, id, count):
+		self.socket.sendall(pack('<ihhb', 5, S_UPDATE_BID, id, count))
 
 	# ==================================================================
 	# Функции-обработчики команд клиента
@@ -345,6 +352,9 @@ class Player:
 		bids.removePlayerFromBid(self.bidId, self)
 		return 0
 
+	# Функция обрабатывает запрос клиента на создание заявки.
+	# Пока сделано так, что количество игроков в заявке лежит в пределах
+	# [1;6]
 	def cCreateBid(self, data):
 		count = getChar(data, 0)
 		if count >= 1 and count <= 6:
@@ -354,6 +364,14 @@ class Player:
 	# ==================================================================
 	# Прочие функции
 	# ==================================================================
+	# Функция отправляет клиенту список текущих заявок.
+	def sendBidsList(self):
+		bids.lock.acquire()
+		for b in bids.bids:
+			if b:
+				self.sNewBid(id, b.op, b.count, b.curcount)
+		bids.lock.release()
+
 	# Функция инициализации рюкзака. Функция разворачивает запись
 	# рюкзака, извлеченную из базы. То же происходит с ячейками
 	# инвентаря.

@@ -36,7 +36,16 @@ class BidsController:
 		b = self.bids[id]
 		for player in players:
 			if player:
-				player.sNewBid(id, b.op, b.count)
+				player.sNewBid(id, b.op, b.count, b.curcount)
+		playersLock.release()
+
+	# Рассказать игрокам об обновлении состояния заявки
+	def sayUpdateBid(self, id):
+		playersLock.acquire()
+		b = self.bids[id]
+		for player in players:
+			if player:
+				player.sUpdateBid(id, b.curcount)
 		playersLock.release()
 
 	# Рассказать игрокам об удалении заявки
@@ -53,6 +62,7 @@ class BidsController:
 			b = self.bids[id]
 			if b and math.fabs(player.params["usedOP"] - b.op) <= 5:
 				b.addPlayer(player)
+				self.sayUpdateBid(id)
 
 	# Удаление игрока из списка игроков в заявке
 	def removePlayerFromBid(self, id, player):
