@@ -7,6 +7,7 @@ package view
 	import flash.events.Event;
 	import model.MainModel;
 	import view.menu.BackpackWindow;
+	import view.menu.CreateBidWindow;
 	import view.menu.LevelUpWindow;
 	import view.menu.LoginWindow;
 	import view.menu.MainWindow;
@@ -25,6 +26,7 @@ package view
 		public static const LEVEL_UP_WINDOW:String = "level_up_window";
 		public static const BACKPACK_WINDOW:String = "backpack_window";
 		public static const SHOP_WINDOW:String = "shop_window";
+		public static const CREATE_BID_WINDOW:String = "create_bid_window";
 
 		private var _model:MainModel;
 		private var _windows:Object;
@@ -34,6 +36,7 @@ package view
 		private var _leveUpWindow:LevelUpWindow;
 		private var _backpackWindow:BackpackWindow;
 		private var _shopWindow:ShopWindow;
+		private var _createBidWindow:CreateBidWindow;
 
 		public function MainView(model:MainModel, host:DisplayObjectContainer) 
 		{
@@ -78,7 +81,7 @@ package view
 			addChild(_loginWindow);
 			_registrationWindow = new RegistrationWindow(_model);
 			_windows[REGISTRATION_WINDOW] = _registrationWindow;
-			_mainWindow = new MainWindow();
+			_mainWindow = new MainWindow(_model);
 			_windows[MAIN_WINDOW] = _mainWindow;
 			_leveUpWindow = new LevelUpWindow();
 			_windows[LEVEL_UP_WINDOW] = _leveUpWindow;
@@ -86,27 +89,9 @@ package view
 			_windows[BACKPACK_WINDOW] = _backpackWindow;
 			_shopWindow = new ShopWindow(_model);
 			_windows[SHOP_WINDOW] = _shopWindow;
+			_createBidWindow = new CreateBidWindow();
+			_windows[CREATE_BID_WINDOW] = _createBidWindow;
 			resizeHandler();
-		}
-		
-		public function get loginWindow():LoginWindow 
-		{
-			return _loginWindow;
-		}
-		
-		public function get registrationWindow():RegistrationWindow 
-		{
-			return _registrationWindow;
-		}
-		
-		public function get mainWindow():MainWindow 
-		{
-			return _mainWindow;
-		}
-		
-		public function get leveUpWindow():LevelUpWindow 
-		{
-			return _leveUpWindow;
 		}
 		
 		public function get backpackWindow():BackpackWindow 

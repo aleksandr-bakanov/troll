@@ -28,6 +28,10 @@ package control
 		public static const S_SHOP_ITEMS:int = 15;
 		public static const S_ADD_ITEM:int = 17;
 		public static const S_CLIENT_MONEY:int = 19;
+		public static const S_NEW_BID:int = 21;
+		public static const S_REMOVE_BID:int = 23;
+		public static const S_UPDATE_BID:int = 25;
+
 		// Client side
 		public static const C_LOGIN:int = 2;
 		public static const C_REGISTER:int = 4;
@@ -37,6 +41,9 @@ package control
 		public static const C_BUY_ITEM:int = 12;
 		public static const C_SELL_ITEM:int = 14;
 		public static const C_ADD_STAT:int = 16;
+		public static const C_ENTER_BID:int = 18;
+		public static const C_EXIT_BID:int = 20;
+		public static const C_CREATE_BID:int = 22;
 		
 		private var _socket:Socket;
 		private var _lastComSize:int;
@@ -64,6 +71,9 @@ package control
 			Dispatcher.instance.addEventListener(UserEvent.SEND_SELL_ITEM, cSellItem);
 			Dispatcher.instance.addEventListener(UserEvent.SEND_BUY_ITEM, cBuyItem);
 			Dispatcher.instance.addEventListener(UserEvent.SEND_ADD_STAT, cAddStat);
+			Dispatcher.instance.addEventListener(UserEvent.CREATE_BID, cCreateBid);
+			Dispatcher.instance.addEventListener(UserEvent.EXIT_BID, cExitBid);
+			Dispatcher.instance.addEventListener(UserEvent.ENTER_BID, cEnterBid);
 		}
 		
 		private function configureSocket():void
@@ -146,6 +156,9 @@ package control
 				case S_SHOP_ITEMS: sShopItems(); break;
 				case S_CLIENT_MONEY: sClientMoney(); break;
 				case S_ADD_ITEM: sAddItem(); break;
+				case S_NEW_BID: sNewBid(); break;
+				case S_REMOVE_BID: sRemoveBid(); break;
+				case S_UPDATE_BID: sUpdateBid(); break;
 				default: break;
 			}
 			_lastComSize = 0;
@@ -237,6 +250,33 @@ package control
 			}
 			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.ADD_ITEM, id));
 		}
+		
+		private function sNewBid():void 
+		{
+			var id:int = _socket.readShort();
+			var op:int = _socket.readShort();
+			var count:int = _socket.readByte();
+			var curCount:int = _socket.readByte();
+			var name:String = _socket.readUTF();
+			_model.bids[id] = { id:id, op:op, count:count, curCount:curCount, name:name };
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.NEW_BID, id));
+		}
+		
+		private function sRemoveBid():void 
+		{
+			var id:int = _socket.readShort();
+			_model.bids[id] = null;
+			Debug.out("sRemoveBid(" + id + ")");
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.REMOVE_BID, id));
+		}
+		
+		private function sUpdateBid():void 
+		{
+			var id:int = _socket.readShort();
+			var curCount:int = _socket.readByte();
+			_model.bids[id].curCount = curCount;
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.UPDATE_BID, id));
+		}
 
 
 		//=============================================================
@@ -319,6 +359,31 @@ package control
 			_socket.writeInt(3);
 			_socket.writeShort(C_ADD_STAT);
 			_socket.writeByte(e.data as int);
+			_socket.flush();
+		}
+		
+		private function cCreateBid(e:UserEvent):void 
+		{
+			var ba:ByteArray = new ByteArray();
+			ba.endian = Endian.LITTLE_ENDIAN;
+			ba.writeShort(C_CREATE_BID);
+			ba.writeByte(e.data.count as int);
+			ba.writeUTF(e.data.name as String);
+			flushByteArray(ba);
+		}
+		
+		private function cExitBid(e:UserEvent):void 
+		{
+			_socket.writeInt(2);
+			_socket.writeShort(C_EXIT_BID);
+			_socket.flush();
+		}
+		
+		private function cEnterBid(e:UserEvent):void 
+		{
+			_socket.writeInt(4);
+			_socket.writeShort(C_ENTER_BID);
+			_socket.writeShort(e.data as int);
 			_socket.flush();
 		}
 

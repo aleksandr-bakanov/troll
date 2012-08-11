@@ -25,6 +25,12 @@ package control
 		public static const SEND_BUY_ITEM:String = "send_buy_item";
 		public static const ADD_ITEM:String = "add_item";
 		public static const SEND_ADD_STAT:String = "send_add_stat";
+		public static const CREATE_BID:String = "create_bid";
+		public static const NEW_BID:String = "new_bid";
+		public static const REMOVE_BID:String = "remove_bid";
+		public static const UPDATE_BID:String = "update_bid";
+		public static const EXIT_BID:String = "exit_bid";
+		public static const ENTER_BID:String = "enter_bid";
 		
 		public var data:Object;
 		

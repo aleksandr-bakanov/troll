@@ -18,17 +18,17 @@ class BidsController:
 	# Создание заявки. Заявка базируется на ОП создателя и максимальном
 	# количестве игроков.
 	# @param player	игрок создавший заявку
-	def createBid(self, player, op, count):
+	def createBid(self, player, op, count, name):
 		self.lock.acquire()
 		id = self.findEmptyPlace(self.bids)
-		b = bid.Bid(id, op, self.checkBidForStart, count)
+		b = bid.Bid(id, op, self.checkBidForStart, count, name)
 		if id == len(self.bids):
 			self.bids.append(b)
 		else:
 			self.bids[id] = b
 		self.sayAboutNewBid(id)
-		self.addPlayerToBid(id, player)
 		self.lock.release()
+		self.addPlayerToBid(id, player)
 	
 	# Рассказать игрокам о новой заявке
 	def sayAboutNewBid(self, id):
@@ -36,7 +36,7 @@ class BidsController:
 		b = self.bids[id]
 		for player in players:
 			if player:
-				player.sNewBid(id, b.op, b.count, b.curcount)
+				player.sNewBid(id, b.op, b.count, b.curcount, b.name)
 		playersLock.release()
 
 	# Рассказать игрокам об обновлении состояния заявки
@@ -58,23 +58,29 @@ class BidsController:
 
 	# Добавления игрока в список игроков в заявке
 	def addPlayerToBid(self, id, player):
+		self.lock.acquire()
 		if id >= 0 and id < len(self.bids):
 			b = self.bids[id]
 			if b and math.fabs(player.params["usedOP"] - b.op) <= 5:
 				b.addPlayer(player)
 				self.sayUpdateBid(id)
+		self.lock.release()
 
 	# Удаление игрока из списка игроков в заявке
 	def removePlayerFromBid(self, id, player):
+		self.lock.acquire()
 		if id >= 0 and id < len(self.bids):
 			b = self.bids[id]
 			if b:
 				b.removePlayer(player)
+				self.sayUpdateBid(id)
+		self.lock.release()
 
 	# Удаление заявки
 	def deleteBid(self, id):
 		self.lock.acquire()
 		self.bids[id].stopTimer()
+		self.bids[id].clear()
 		self.bids[id] = None
 		self.sayRemoveBid(id)
 		self.lock.release()
@@ -88,6 +94,8 @@ class BidsController:
 			self.deleteBid(id)
 		else:
 			# Start fight
+			print 'Start fight'
+			self.deleteBid(id)
 			pass
 
 	# Поиск свободного места в списке holder

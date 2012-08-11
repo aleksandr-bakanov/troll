@@ -17,6 +17,7 @@ package model
 		public var name:String;
 		public var params:Object;
 		private var _oldParams:Object;
+		public var bids:Array = [];
 		
 		// Хранилище параметров предметов. Ключи - строковые id.
 		public static const items:Object = {};

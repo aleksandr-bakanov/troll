@@ -5,6 +5,8 @@ from consts import *
 from bc import *
 from struct import *
 import threading
+import exceptions
+import errno
 
 
 # Поиграемся с MySQL
@@ -34,7 +36,7 @@ class Player:
 		self.socket = socket
 		self.db = db
 		self.cursor = db.cursor()
-		self.bids = bids
+		self.bidsController = bids
 		self.bidId = -1
 		self.addSelfInPlayers()
 		self.initBackpack()
@@ -69,6 +71,7 @@ class Player:
 					if len(data) - INT_SIZE >= commandLen:
 						try:
 							ob = self.parse(data)
+							commandLen = 0
 						except UserExc:
 							break
 						data = data[ob:]
@@ -77,6 +80,7 @@ class Player:
 			elif len(data) - INT_SIZE >= commandLen:
 				try:
 					ob = self.parse(data)
+					commandLen = 0
 				except UserExc:
 					break
 				data = data[ob:]
@@ -151,7 +155,7 @@ class Player:
 	# Функции отправки команд клиенту
 	# ==================================================================
 	def sLoginSuccess(self):
-		self.socket.sendall(pack('<ih', 2, S_LOGIN_SUCCESS))
+		self.sendData(pack('<ih', 2, S_LOGIN_SUCCESS))
 
 	# Функция отправляет клиенту уже развернутые параметры персонажа.
 	# В связи с этим потребность в команде S_ITEM_INFO может отпасть.
@@ -160,7 +164,7 @@ class Player:
 		paramsJSON = json.dumps(self.params)
 		paramsLen = len(paramsJSON)
 		comSize = SHORT_SIZE * 3 + INT_SIZE + nameLen + paramsLen
-		self.socket.sendall(pack('<ihih' + str(nameLen) + 'sh' + str(paramsLen) + 's',
+		self.sendData(pack('<ihih' + str(nameLen) + 'sh' + str(paramsLen) + 's',
 			comSize, S_FULL_PARAMS, self.id, nameLen, self.name, paramsLen, paramsJSON))
 
 	# Функция отправляет клиенту всю таблицу items в json, чтобы у него
@@ -176,29 +180,31 @@ class Player:
 		items = json.dumps(items)
 		itemsLen = len(items)
 		comSize = SHORT_SIZE * 2 + itemsLen
-		self.socket.sendall(pack('<ihh' + str(itemsLen) + 's',
+		self.sendData(pack('<ihh' + str(itemsLen) + 's',
 			comSize, S_SHOP_ITEMS, itemsLen, items))
 
 	# Функция сообщает игроку сколько у него денег.
 	def sClientMoney(self):
-		self.socket.sendall(pack('<ihi', 3, S_CLIENT_MONEY, self.params["money"]))
+		self.sendData(pack('<ihi', 3, S_CLIENT_MONEY, self.params["money"]))
 
 	# Функция извещает игрока о добавлении в рюкзак предмета с указанным
 	# id, в указанном количестве.
 	def sAddItem(self, id, count):
-		self.socket.sendall(pack('<ihhb', 5, S_ADD_ITEM, id, count))
+		self.sendData(pack('<ihhb', 5, S_ADD_ITEM, id, count))
 
 	# Функция извещает игрока о появлении новой заявки.
-	def sNewBid(self, id, op, count, curcount):
-		self.socket.sendall(pack('<ihhhbb', 8, S_NEW_BID, id, op, count, curcount))
+	def sNewBid(self, id, op, count, curcount, name):
+		nameLen = len(name)
+		self.sendData(pack('<ihhhbbh' + str(nameLen) + 's', 10 + nameLen,
+			S_NEW_BID, id, op, count, curcount, nameLen, name))
 
 	# Функция извещает игрока об удалении заявки.
 	def sRemoveBid(self, id):
-		self.socket.sendall(pack('<ihh', 4, S_REMOVE_BID, id))
+		self.sendData(pack('<ihh', 4, S_REMOVE_BID, id))
 
 	# Функция извещает игрока об обновлении состояния заявки.
 	def sUpdateBid(self, id, count):
-		self.socket.sendall(pack('<ihhb', 5, S_UPDATE_BID, id, count))
+		self.sendData(pack('<ihhb', 5, S_UPDATE_BID, id, count))
 
 	# ==================================================================
 	# Функции-обработчики команд клиента
@@ -209,10 +215,10 @@ class Player:
 	def cItemInfo(self, data):
 		id = getShort(data, 0)
 		if self.cursor.execute("SELECT params FROM items WHERE id=%s", (id,)) == 1:
-			params = unicode(self.cursor.fetchone()[0])
+			params = unicode(self.cursor.fetchone()[0], errors='replace')
 			paramsLen = len(params.encode('utf-8'))
 			comSize = SHORT_SIZE * 3 + paramsLen
-			self.socket.sendall(pack('<ihhh' + str(paramsLen) + 's',
+			self.sendData(pack('<ihhh' + str(paramsLen) + 's',
 				comSize, S_ITEM_INFO, id, paramsLen, params.encode('utf-8')))
 		return SHORT_SIZE
 
@@ -344,12 +350,13 @@ class Player:
 	# Функция выполняет запрос клиента на вступление в заявку.
 	def cEnterBid(self, data):
 		id = getShort(data, 0)
-		bids.addPlayerToBid(id, self)
+		if self.bidId == -1:
+			self.bidsController.addPlayerToBid(id, self)
 		return SHORT_SIZE
 
 	# Функция выполняет запрос клиента на выход из заявки.
 	def cExitBid(self, data):
-		bids.removePlayerFromBid(self.bidId, self)
+		self.bidsController.removePlayerFromBid(self.bidId, self)
 		return 0
 
 	# Функция обрабатывает запрос клиента на создание заявки.
@@ -357,20 +364,34 @@ class Player:
 	# [1;6]
 	def cCreateBid(self, data):
 		count = getChar(data, 0)
-		if count >= 1 and count <= 6:
-			bids.createBid(self, self.params["usedOP"], count)
-		return CHAR_SIZE
+		name = getUTF(data, 1)
+		if self.bidId == -1 and count >= 1 and count <= 6:
+			self.bidsController.createBid(self, self.params["usedOP"], count, name)
+		return CHAR_SIZE + SHORT_SIZE + len(name)
 
 	# ==================================================================
 	# Прочие функции
 	# ==================================================================
+	# Функция отправляет клиенту переданный кусок данных. Данная функция
+	# была выделена отдельно для перехвата ошибок типа записи в закрытый
+	# сокет (broken pipe (SIGPIPE)).
+	def sendData(self, data):
+		try:
+			self.socket.sendall(data)
+		except IOError as e:
+			if e.errno == errno.EPIPE:
+				# EPIPE error
+				print 'Broken pipe (user ' + self.name + ')'
+			raise UserExc()
+
+	
 	# Функция отправляет клиенту список текущих заявок.
 	def sendBidsList(self):
-		bids.lock.acquire()
-		for b in bids.bids:
+		self.bidsController.lock.acquire()
+		for b in self.bidsController.bids:
 			if b:
-				self.sNewBid(id, b.op, b.count, b.curcount)
-		bids.lock.release()
+				self.sNewBid(id, b.op, b.count, b.curcount, b.name)
+		self.bidsController.lock.release()
 
 	# Функция инициализации рюкзака. Функция разворачивает запись
 	# рюкзака, извлеченную из базы. То же происходит с ячейками
@@ -560,14 +581,12 @@ def parse(data, socket, db, bids):
 		# Если rc (rows count) == 0, значит такой пары логин/пароль
 		# в базе данных нет.
 		if not rc:
-			socket.sendall(pack('<ihb', 3, S_LOGIN_FAILURE, 1))
-			return
+			sendData(socket, pack('<ihb', 3, S_LOGIN_FAILURE, 1))
 		# Достаем данные
 		data = cursor.fetchall()[0]
 		# Если кто-то уже играет под этим логином, уходим
 		if data[1] == 1:
-			socket.sendall(pack('<ihb', 3, S_LOGIN_FAILURE, 2))
-			return
+			sendData(socket, pack('<ihb', 3, S_LOGIN_FAILURE, 2))
 		# А если нет, отмечаем что данный логин уже занят
 		cursor.execute("UPDATE user SET is_playing=1 WHERE id=%s", (data[0],))
 		db.commit()
@@ -589,15 +608,13 @@ def parse(data, socket, db, bids):
 		cursor.execute("SELECT id FROM user WHERE login=%s", (login,))
 		if cursor.rowcount > 0:
 			cursor.close()
-			socket.sendall(pack('<ihb', 3, S_REGISTER_FAILURE, 1))
-			return
+			sendData(socket, pack('<ihb', 3, S_REGISTER_FAILURE, 1))
 		cursor.close()
 		# Проверим логин регуляркой
 		# Черная магия!
 		res = re.findall(u'[a-zA-Zа-яА-ЯЁё]+[a-zA-Zа-яА-Я0-9Ёё]*', login, re.U)
 		if res == None or (len(res) > 0 and len(login) != len(res[0])):
-			socket.sendall(pack('<ihb', 3, S_REGISTER_FAILURE, 2))
-			return
+			sendData(socket, pack('<ihb', 3, S_REGISTER_FAILURE, 2))
 		# Конец черной магии
 		pos += 2 + len(login)
 		password = getUTF(data, pos)
@@ -655,7 +672,7 @@ def parse(data, socket, db, bids):
 		data = cursor.fetchall()[0]
 		cursor.close()
 		# Отсылаем сообщение об успешной авторизации
-		socket.sendall(pack('<ih', 2, S_REGISTER_SUCCESS))
+		sendData(socket, pack('<ih', 2, S_REGISTER_SUCCESS))
 		# Создаем объект Player и передаем ему данные
 		player = Player(data[0], login, json.dumps(params), socket, db, bids)
 		# Запускаем обработку данных игроком
@@ -664,3 +681,9 @@ def parse(data, socket, db, bids):
 		raise UserExc()
 	else:
 		return 0
+
+def sendData(socket, data):
+	try:
+		socket.sendall(data)
+	except IOError as e:
+		raise UserExc()
