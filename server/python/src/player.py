@@ -4,6 +4,7 @@ from consts import *
 # Для парсинга данных пользуемся struct
 from bc import *
 from struct import *
+from config import *
 import threading
 import exceptions
 import errno
@@ -512,7 +513,7 @@ def run (socket, bids):
 	# Пока будем ждать от него только команды C_LOGIN, так как если бы
 	# он уже существовал в базе данных.
 	# Подключаемся к базе данных
-	db = MySQLdb.connect(host="localhost", user="root", passwd="1", db="troll", charset='utf8')
+	db = MySQLdb.connect(host=MYSQL_HOST, user=MYSQL_USER, passwd=MYSQL_PASS, db=MYSQL_DB, charset='utf8')
 	# Начинаем ожидать байты от клиента
 	data = ''
 	commandLen = 0

@@ -8,10 +8,11 @@ import threading
 # Импортируем функцию run, которая будет запускаться в отдельном потоке
 # при каждом подключении клиента.
 from src.player import run
+from src.config import *
 
 # При старте сервера делаем всех игроков не играющими
 import MySQLdb
-db = MySQLdb.connect(host="localhost", user="root", passwd="1", db="troll", charset='utf8')
+db = MySQLdb.connect(host=MYSQL_HOST, user=MYSQL_USER, passwd=MYSQL_PASS, db=MYSQL_DB, charset='utf8')
 c = db.cursor()
 c.execute("UPDATE user SET is_playing = 0 WHERE 1")
 db.commit()
