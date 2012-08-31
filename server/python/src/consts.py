@@ -9,6 +9,12 @@ PLACE_PANTS = 2
 PLACE_HAND_WEAPON = 3
 PLACE_BELT_WEAPON = 4
 
+# Константы боя
+# CT = Cell Type
+CT_FLOOR = 1
+CT_WALL = 2
+CT_DOOR = 2
+
 # Размеры данных
 BOOL_SIZE = 1
 CHAR_SIZE = 1

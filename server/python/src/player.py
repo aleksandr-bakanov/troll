@@ -39,6 +39,8 @@ class Player:
 		self.cursor = db.cursor()
 		self.bidsController = bids
 		self.bidId = -1
+		self.fightController = None
+		self.fInfo = {}
 		self.addSelfInPlayers()
 		self.initBackpack()
 		self.sendBidsList()
@@ -492,10 +494,15 @@ class Player:
 		self.placeInPlayers = place
 		playersLock.release()
 
-	# Функция удаления себя из списка игроков
+	# Функция удаления себя из списков игроков
 	def deleteSelfFromPlayers(self):
 		playersLock.acquire()
 		players[self.placeInPlayers] = None
+		if self.bidId >= 0:
+			self.bidsController.removePlayerFromBid(self.bidId, self)
+		if self.fightController:
+			self.fightController.removePlayer(self)
+			self.fightController = None
 		playersLock.release()
 
 # ======================================================================

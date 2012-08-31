@@ -1,6 +1,7 @@
 # coding=utf-8
 import math
 import bid
+import fightController
 import threading
 from player import players
 from player import playersLock
@@ -95,8 +96,16 @@ class BidsController:
 		else:
 			# Start fight
 			print 'Start fight'
+			self.startFight(b)
 			self.deleteBid(id)
 			pass
+
+	# Функция запуска боя. Здесь нужно забрать нужную информацию
+	# из заявки, потому что сразу после этой функции заявка удаляется.
+	def startFight(self, bid):
+		self.lock.acquire()
+		fc = fightController.FightController(bid.players[:])
+		self.lock.release()
 
 	# Поиск свободного места в списке holder
 	def findEmptyPlace(self, holder):
