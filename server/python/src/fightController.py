@@ -34,6 +34,19 @@ class FightController:
 		# ходов мобов.
 		self.knownArea = self.getKnownArea()
 
+	# Функция отправки игрокам только что открытой ими зоны
+	def sendOpenedArea(self, area):
+		pass
+
+	# Функция отправки игрокам только что открытых ими ключей
+	def sendOpenedKeys(self, keys):
+		pass
+
+	def __del__(self):
+		del self.players
+		del self.map
+		del self.knownArea
+
 	def getKnownArea(self):
 		return self.map[:]
 
