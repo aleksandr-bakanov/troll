@@ -8,6 +8,7 @@ package view
 	import model.MainModel;
 	import view.menu.BackpackWindow;
 	import view.menu.CreateBidWindow;
+	import view.menu.FightWindow;
 	import view.menu.LevelUpWindow;
 	import view.menu.LoginWindow;
 	import view.menu.MainWindow;
@@ -27,6 +28,7 @@ package view
 		public static const BACKPACK_WINDOW:String = "backpack_window";
 		public static const SHOP_WINDOW:String = "shop_window";
 		public static const CREATE_BID_WINDOW:String = "create_bid_window";
+		public static const FIGHT_WINDOW:String = "fight_window";
 
 		private var _model:MainModel;
 		private var _windows:Object;
@@ -37,6 +39,7 @@ package view
 		private var _backpackWindow:BackpackWindow;
 		private var _shopWindow:ShopWindow;
 		private var _createBidWindow:CreateBidWindow;
+		private var _fightWindow:FightWindow;
 
 		public function MainView(model:MainModel, host:DisplayObjectContainer) 
 		{
@@ -91,6 +94,8 @@ package view
 			_windows[SHOP_WINDOW] = _shopWindow;
 			_createBidWindow = new CreateBidWindow();
 			_windows[CREATE_BID_WINDOW] = _createBidWindow;
+			_fightWindow = new FightWindow();
+			_windows[FIGHT_WINDOW] = _fightWindow;
 			resizeHandler();
 		}
 		

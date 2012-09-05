@@ -31,6 +31,9 @@ package control
 		public static const S_NEW_BID:int = 21;
 		public static const S_REMOVE_BID:int = 23;
 		public static const S_UPDATE_BID:int = 25;
+		public static const S_START_FIGHT_INFO:int = 27;
+		public static const S_AREA_OPEN:int = 29;
+		public static const S_KEYS_OPEN:int = 31;
 
 		// Client side
 		public static const C_LOGIN:int = 2;
@@ -159,6 +162,8 @@ package control
 				case S_NEW_BID: sNewBid(); break;
 				case S_REMOVE_BID: sRemoveBid(); break;
 				case S_UPDATE_BID: sUpdateBid(); break;
+				case S_START_FIGHT_INFO: sStartFightInfo(); break;
+				case S_AREA_OPEN: sAreaOpen(); break;
 				default: break;
 			}
 			_lastComSize = 0;
@@ -276,6 +281,16 @@ package control
 			var curCount:int = _socket.readByte();
 			_model.bids[id].curCount = curCount;
 			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.UPDATE_BID, id));
+		}
+		
+		private function sStartFightInfo():void
+		{
+			
+		}
+		
+		private function sAreaOpen():void 
+		{
+			
 		}
 
 

@@ -13,7 +13,7 @@ PLACE_BELT_WEAPON = 4
 # CT = Cell Type
 CT_FLOOR = 1
 CT_WALL = 2
-CT_DOOR = 2
+CT_DOOR = 3
 
 # Размеры данных
 BOOL_SIZE = 1
@@ -35,6 +35,9 @@ S_CLIENT_MONEY = 19
 S_NEW_BID = 21
 S_REMOVE_BID = 23
 S_UPDATE_BID = 25
+S_START_FIGHT_INFO = 27
+S_AREA_OPEN = 29
+S_KEYS_OPEN = 31
 
 # Client side commands ids
 C_LOGIN = 2

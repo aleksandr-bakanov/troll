@@ -52,6 +52,7 @@
   <libraryPaths>
     <element path="lib\blooddy_crypto.swc" />
     <element path="lib\menu_assets.swc" />
+    <element path="lib\assets.swc" />
   </libraryPaths>
   <!-- External Libraries -->
   <externalLibraryPaths>
