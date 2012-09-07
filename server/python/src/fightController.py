@@ -57,11 +57,13 @@ class FightController:
 			playerId += 1
 		for i in self.moveOrder:
 			data += pack('<b', i)
-		comSize += len(self.players)
+		comSize += len(self.players) + 1
 		data = pack('<i', comSize) + data
+		playerId = 0
 		for p in self.players:
 			if p:
-				p.sendData(data)
+				p.sendData(data + pack('<b', playerId))
+			playerId += 1
 
 	# В эту функцию следует подавать уже подготовленный трехмерный массив.
 	# area = [ [floor_id, cell, cell, ... ], ... ]

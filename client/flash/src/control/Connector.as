@@ -285,7 +285,27 @@ package control
 		
 		private function sStartFightInfo():void
 		{
-			
+			_model.fInfo = { };
+			var playersCount:int = _socket.readByte();
+			_model.fInfo.players = { };
+			var i:int;
+			for (i = 0; i < playersCount; i++)
+			{
+				var id:int = _socket.readByte();
+				if (id >= 0)
+				{
+					var o:Object = { };
+					o.floorId = _socket.readByte();
+					o.x = _socket.readShort();
+					o.y = _socket.readShort();
+					_model.fInfo.players[id] = o;
+				}
+			}
+			_model.fInfo.moveOrder = [];
+			for (i = 0; i < playersCount; i++)
+				_model.fInfo.moveOrder.push(_socket.readByte());
+			_model.fInfo.selfId = _socket.readByte();
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.SHOW_WINDOW, MainView.FIGHT_WINDOW));
 		}
 		
 		private function sAreaOpen():void 
