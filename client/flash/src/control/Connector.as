@@ -306,6 +306,7 @@ package control
 				_model.fInfo.moveOrder.push(_socket.readByte());
 			_model.fInfo.selfId = _socket.readByte();
 			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.SHOW_WINDOW, MainView.FIGHT_WINDOW));
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.START_FIGHT));
 		}
 		
 		private function sAreaOpen():void 
