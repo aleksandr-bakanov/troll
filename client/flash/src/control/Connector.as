@@ -8,6 +8,7 @@ package control
 	import model.*;
 	import view.common.Debug;
 	import view.MainView;
+	import view.menu.FightWindow;
 
 	/**
 	 * Connector. It sends and receives the commands
@@ -271,7 +272,6 @@ package control
 		{
 			var id:int = _socket.readShort();
 			_model.bids[id] = null;
-			Debug.out("sRemoveBid(" + id + ")");
 			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.REMOVE_BID, id));
 		}
 		
@@ -311,7 +311,26 @@ package control
 		
 		private function sAreaOpen():void 
 		{
-			
+			var cells:Object = { };
+			var floorsCount:int = _socket.readByte();
+			for (var i:int = 0; i < floorsCount; i++)
+			{
+				var floorId:int = _socket.readByte();
+				if (!cells[floorId])
+					cells[floorId] = [];
+				var cellsCount:int = _socket.readShort();
+				for (var j:int = 0; j < cellsCount; j++)
+				{
+					var cell:Object = { };
+					cell.x = _socket.readShort();
+					cell.y = _socket.readShort();
+					cell.type = _socket.readByte();
+					if (cell.type == FightWindow.CT_WALL)
+						cell.hp = _socket.readByte();
+					cells[floorId].push(cell);
+				}
+			}
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.AREA_OPEN, cells));
 		}
 
 

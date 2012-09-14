@@ -59,7 +59,6 @@ package view.menu
 		private function removeBidHandler(e:UserEvent):void 
 		{
 			var id:int = e.data as int;
-			Debug.out("id = " + id);
 			var bid:DisplayObject = bids[id] as DisplayObject;
 			(bid as EventDispatcher).removeEventListener(MouseEvent.CLICK, bidClickHandler);
 			module.bids.removeChild(bid);

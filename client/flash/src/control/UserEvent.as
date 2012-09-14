@@ -32,6 +32,7 @@ package control
 		public static const EXIT_BID:String = "exit_bid";
 		public static const ENTER_BID:String = "enter_bid";
 		public static const START_FIGHT:String = "start_fight";
+		public static const AREA_OPEN:String = "area_open";
 		
 		public var data:Object;
 		

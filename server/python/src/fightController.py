@@ -31,8 +31,8 @@ class FightController:
 		# Пока (и впредь?) будем расставлять игроков
 		# так, чтобы в первый ход не пришлось встраивать в порядок
 		# ходов мобов.
-		self.players[0].fInfo["x"] = 0
-		self.players[0].fInfo["y"] = 0
+		self.players[0].fInfo["x"] = 1
+		self.players[0].fInfo["y"] = 1
 		self.players[0].fInfo["floor"] = 0
 		self.knownArea = self.getKnownArea()
 		self.moveOrder = self.createMoveOrder()
@@ -69,19 +69,28 @@ class FightController:
 	# area = [ [floor_id, cell, cell, ... ], ... ]
 	def sendAreaOpen(self, area):
 		comSize = 0
-		data = pack('<b', len(area))
-		comSize += 1
+		data = pack('<hb', S_AREA_OPEN, len(area))
+		comSize += 3
 		for f in area:
-			data += pack('<bh', f[0], len(f) - 1)
+			floorId = f[0]
+			f = f[1:]
+			
+			cellsCount = 0
+			for a in f:
+				for b in a:
+					cellsCount += 1
+			data += pack('<bh', floorId, cellsCount)
 			comSize += 3
-			for c in f:
-				data += pack('<hhb', c.x, c.y, c.type)
-				comSize += 5
-				if c.type == CT_WALL:
-					# Пока стены будут нерушимы, а потом wall_hp будем
-					# доставать из cell.
-					data += pack('<b', -1)
-					comSize += 1
+			
+			for line in f:
+				for c in line:
+					data += pack('<hhb', c.x, c.y, c.type)
+					comSize += 5
+					if c.type == CT_WALL:
+						# Пока стены будут нерушимы, а потом wall_hp будем
+						# доставать из cell.
+						data += pack('<b', -1)
+						comSize += 1
 		data = pack('<i', comSize) + data
 		for p in self.players:
 			if p:

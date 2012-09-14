@@ -94,7 +94,7 @@ package view
 			_windows[SHOP_WINDOW] = _shopWindow;
 			_createBidWindow = new CreateBidWindow();
 			_windows[CREATE_BID_WINDOW] = _createBidWindow;
-			_fightWindow = new FightWindow();
+			_fightWindow = new FightWindow(_model);
 			_windows[FIGHT_WINDOW] = _fightWindow;
 			resizeHandler();
 		}
