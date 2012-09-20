@@ -62,7 +62,7 @@ class BidsController:
 		self.lock.acquire()
 		if id >= 0 and id < len(self.bids):
 			b = self.bids[id]
-			if b and math.fabs(player.params["usedOP"] - b.op) <= 5:
+			if b: # and math.fabs(player.params["usedOP"] - b.op) <= 5:
 				b.addPlayer(player)
 				self.sayUpdateBid(id)
 		self.lock.release()

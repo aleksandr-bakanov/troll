@@ -35,6 +35,7 @@ package control
 		public static const S_START_FIGHT_INFO:int = 27;
 		public static const S_AREA_OPEN:int = 29;
 		public static const S_KEYS_OPEN:int = 31;
+		public static const S_CHAT_MESSAGE:int = 33;
 
 		// Client side
 		public static const C_LOGIN:int = 2;
@@ -48,6 +49,7 @@ package control
 		public static const C_ENTER_BID:int = 18;
 		public static const C_EXIT_BID:int = 20;
 		public static const C_CREATE_BID:int = 22;
+		public static const C_CHAT_MESSAGE:int = 24;
 		
 		private var _socket:Socket;
 		private var _lastComSize:int;
@@ -78,6 +80,19 @@ package control
 			Dispatcher.instance.addEventListener(UserEvent.CREATE_BID, cCreateBid);
 			Dispatcher.instance.addEventListener(UserEvent.EXIT_BID, cExitBid);
 			Dispatcher.instance.addEventListener(UserEvent.ENTER_BID, cEnterBid);
+			Dispatcher.instance.addEventListener(UserEvent.C_CHAT_MESSAGE, cChatMessage);
+		}
+		
+		private function cChatMessage(e:UserEvent):void 
+		{
+			var mes:String = e.data as String;
+			var ba:ByteArray = new ByteArray();
+			ba.endian = Endian.LITTLE_ENDIAN;
+			ba.writeShort(C_CHAT_MESSAGE);
+			ba.writeUTF(mes);
+			_socket.writeInt(ba.length);
+			_socket.writeBytes(ba);
+			_socket.flush();
 		}
 		
 		private function configureSocket():void
@@ -165,9 +180,16 @@ package control
 				case S_UPDATE_BID: sUpdateBid(); break;
 				case S_START_FIGHT_INFO: sStartFightInfo(); break;
 				case S_AREA_OPEN: sAreaOpen(); break;
+				case S_CHAT_MESSAGE: sChatMessage(); break;
 				default: break;
 			}
 			_lastComSize = 0;
+		}
+		
+		private function sChatMessage():void 
+		{
+			var mes:String = _socket.readUTF();
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.S_CHAT_MESSAGE, mes));
 		}
 		
 		//=============================================================

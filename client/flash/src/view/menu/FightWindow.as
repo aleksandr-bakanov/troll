@@ -6,6 +6,7 @@ package view.menu
 	import flash.display.DisplayObjectContainer;
 	import flash.display.MovieClip;
 	import flash.display.Sprite;
+	import flash.events.MouseEvent;
 	import flash.geom.Point;
 	import flash.utils.Dictionary;
 	import model.MainModel;
@@ -59,6 +60,25 @@ package view.menu
 		{
 			Dispatcher.instance.addEventListener(UserEvent.START_FIGHT, startFight);
 			Dispatcher.instance.addEventListener(UserEvent.AREA_OPEN, areaOpen);
+			Dispatcher.instance.addEventListener(UserEvent.S_CHAT_MESSAGE, sChatMessage);
+			
+			module.enter.addEventListener(MouseEvent.CLICK, enterHandler);
+		}
+		
+		private function enterHandler(e:MouseEvent):void 
+		{
+			if (module.input.text.length)
+			{
+				Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.C_CHAT_MESSAGE, module.input.text));
+				module.input.text = "";
+			}
+		}
+		
+		private function sChatMessage(e:UserEvent):void 
+		{
+			var mes:String = e.data as String;
+			module.output.appendText("\n" + mes);
+			module.output.scrollV = module.output.maxScrollV;
 		}
 		
 		private function startFight(e:UserEvent):void 

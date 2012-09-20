@@ -139,6 +139,8 @@ class Player:
 					operatedBytes += self.cExitBid(data[operatedBytes:])
 				elif comId == C_CREATE_BID:
 					operatedBytes += self.cCreateBid(data[operatedBytes:])
+				elif comId == C_CHAT_MESSAGE:
+					operatedBytes += self.cChatMessage(data[operatedBytes:])
 				# После обработки одной команды смотрим, есть ли еще
 				# что обработать.
 				# Если мы обработали все байты, переданные нам, возвращаем
@@ -208,6 +210,13 @@ class Player:
 	# Функция извещает игрока об обновлении состояния заявки.
 	def sUpdateBid(self, id, count):
 		self.sendData(pack('<ihhb', 5, S_UPDATE_BID, id, count))
+
+	def sChatMessage(self, message):
+		mes = unicode(message, errors='replace')
+		mesLen = len(mes.encode('utf-8'))
+		comSize = mesLen + SHORT_SIZE * 2;
+		self.sendData(pack('<ihh' + str(mesLen) + 's',
+			comSize, S_CHAT_MESSAGE, mesLen, mes.encode('utf-8')))
 	
 	# ==================================================================
 	# Функции-обработчики команд клиента
@@ -352,6 +361,7 @@ class Player:
 
 	# Функция выполняет запрос клиента на вступление в заявку.
 	def cEnterBid(self, data):
+		print "cEnterBid", self.name
 		id = getShort(data, 0)
 		if self.bidId == -1:
 			self.bidsController.addPlayerToBid(id, self)
@@ -359,6 +369,7 @@ class Player:
 
 	# Функция выполняет запрос клиента на выход из заявки.
 	def cExitBid(self, data):
+		print "cExitBid", self.name
 		self.bidsController.removePlayerFromBid(self.bidId, self)
 		return 0
 
@@ -366,11 +377,18 @@ class Player:
 	# Пока сделано так, что количество игроков в заявке лежит в пределах
 	# [1;6]
 	def cCreateBid(self, data):
+		print "cCreateBid", self.name
 		count = getChar(data, 0)
 		name = getUTF(data, 1)
 		if self.bidId == -1 and count >= 1 and count <= 6:
 			self.bidsController.createBid(self, self.params["usedOP"], count, name)
 		return CHAR_SIZE + SHORT_SIZE + len(name)
+
+	def cChatMessage(self, data):
+		mes = getUTF(data, 0)
+		if self.fightController:
+			self.fightController.sendChatMessage(mes)
+		return SHORT_SIZE + len(mes)
 
 	# ==================================================================
 	# Прочие функции

@@ -127,6 +127,10 @@
 				key_x [2]
 				key_y [2]
 
+33	- S_CHAT_MESSAGE.
+	Params:
+		message [string]
+
 ========================================================================
 	Client side commands
 ========================================================================
@@ -224,3 +228,7 @@
 	Params:
 		count [1]
 		name [string]	- максимум 16 символов
+
+24	- C_CHAT_MESSAGE.
+	Params:
+		message [string]

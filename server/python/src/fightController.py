@@ -34,6 +34,11 @@ class FightController:
 		self.players[0].fInfo["x"] = 1
 		self.players[0].fInfo["y"] = 1
 		self.players[0].fInfo["floor"] = 0
+		
+		self.players[1].fInfo["x"] = 0
+		self.players[1].fInfo["y"] = 0
+		self.players[1].fInfo["floor"] = 0
+		
 		self.knownArea = self.getKnownArea()
 		self.moveOrder = self.createMoveOrder()
 		self.sendStartInfo()
@@ -129,6 +134,11 @@ class FightController:
 			j = 0
 			i += 1
 		return map
+
+	def sendChatMessage(self, message):
+		for p in self.players:
+			if p:
+				p.sChatMessage(message)
 
 	def removePlayer(self, player):
 		id = 0

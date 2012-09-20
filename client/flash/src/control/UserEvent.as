@@ -33,6 +33,8 @@ package control
 		public static const ENTER_BID:String = "enter_bid";
 		public static const START_FIGHT:String = "start_fight";
 		public static const AREA_OPEN:String = "area_open";
+		public static const S_CHAT_MESSAGE:String = "s_chat_message";
+		public static const C_CHAT_MESSAGE:String = "c_chat_message";
 		
 		public var data:Object;
 		
