@@ -361,7 +361,6 @@ class Player:
 
 	# Функция выполняет запрос клиента на вступление в заявку.
 	def cEnterBid(self, data):
-		print "cEnterBid", self.name
 		id = getShort(data, 0)
 		if self.bidId == -1:
 			self.bidsController.addPlayerToBid(id, self)
@@ -369,7 +368,6 @@ class Player:
 
 	# Функция выполняет запрос клиента на выход из заявки.
 	def cExitBid(self, data):
-		print "cExitBid", self.name
 		self.bidsController.removePlayerFromBid(self.bidId, self)
 		return 0
 
@@ -377,7 +375,6 @@ class Player:
 	# Пока сделано так, что количество игроков в заявке лежит в пределах
 	# [1;6]
 	def cCreateBid(self, data):
-		print "cCreateBid", self.name
 		count = getChar(data, 0)
 		name = getUTF(data, 1)
 		if self.bidId == -1 and count >= 1 and count <= 6:

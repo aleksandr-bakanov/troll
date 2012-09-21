@@ -140,6 +140,15 @@ class FightController:
 			if p:
 				p.sChatMessage(message)
 
+	def finishFight(self):
+		for p in players:
+			if p:
+				p.fightController = None
+				self.removePlayer(p)
+		self.map = None
+		self.knownArea = None
+		self.moveOrder = None
+
 	def removePlayer(self, player):
 		id = 0
 		for p in self.players:
