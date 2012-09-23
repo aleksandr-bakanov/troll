@@ -20,7 +20,7 @@ class Bid:
 		self.startTimer()
 
 	def startTimer(self):
-		self.t = threading.Timer(15.0, self.cb, [self.id])
+		self.t = threading.Timer(5.0, self.cb, [self.id])
 		self.t.start()
 
 	def stopTimer(self):

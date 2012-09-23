@@ -47,6 +47,8 @@ package view.menu
 		private var _currentAction:int;
 		// Игроков будем добавлять на уровни addChild. Новые ячейки будем добавлять на уровни addChildAt(cell, 0).
 		// Игроку показывается его текущий уровень.
+		private var _glowedActionRange:Array = [];
+		private var _glowedCells:Array = [];
 		
 		public function FightWindow(model:MainModel) 
 		{
@@ -114,7 +116,9 @@ package view.menu
 			for (var id:String in e.data)
 			{
 				if (!_cells[id])
+				{
 					_cells[id] = [];
+				}
 				var floor:Array = _cells[id] as Array;
 				// Проверяем создан ли floorView
 				if (!_floors[id])
@@ -131,6 +135,9 @@ package view.menu
 						floor[info.y] = [];
 					// Не забыть про type.
 					var cell:Cell_asset = new Cell_asset();
+					cell.info = info;
+					if (info.type == CT_FLOOR) cell.gotoAndStop("floor");
+					else cell.gotoAndStop("wall");
 					// Сохраняем ссылку на ячейку.
 					floor[info.y][info.x] = cell;
 					cell.x = CELL_WIDTH * info.x + (info.y % 2 ? CELL_WIDTH / 2 : 0);
@@ -138,6 +145,9 @@ package view.menu
 					(_floors[id] as DisplayObjectContainer).addChildAt(cell, 0);
 				}
 			}
+			
+			var o:Object = _model.fInfo.players["0"];
+			glowRadius(0, floor[0].length, floor.length, o.x, o.y, 0, 3);
 		}
 		
 		/**
@@ -148,8 +158,9 @@ package view.menu
 		 * @param	radius
 		 * @param	isActionArea
 		 */
-		private function glowRadius(cells:DisplayObjectContainer, width:int, height:int, xc:int, yc:int, r1:int, r2:int, glowCenter:Boolean = false, isActionArea:Boolean = false):void
+		private function glowRadius(floorId:int, width:int, height:int, xc:int, yc:int, r1:int, r2:int, glowCenter:Boolean = false, isActionArea:Boolean = false):void
 		{
+			var cells:Array = _cells[floorId] as Array;
 			// Проверка на неверные данные
 			if (width <= 0 || height <= 0 || !cells || yc < 0 || yc >= height || xc < 0 || xc >= width || r1 < 0 || r2 < 0 || (r1 >= r2 && r2 > 0))
 				return;
@@ -181,7 +192,7 @@ package view.menu
 							ycur = yc;
 							if (xcur >= 0 && xcur < width)
 							{
-								cell = cells.getChildByName("cell_" + ycur + "_" + xcur) as MovieClip;
+								cell = cells[ycur][xcur] as MovieClip;
 								array.push( { cell:cell, x:xcur, y:ycur } );
 							}
 						}
@@ -190,13 +201,13 @@ package view.menu
 							ycur = yc + dy;
 							if (xcur >= 0 && xcur < width && ycur >= 0 && ycur < height)
 							{
-								cell = cells.getChildByName("cell_" + ycur + "_" + xcur) as MovieClip;
+								cell = cells[ycur][xcur] as MovieClip;
 								array.push( { cell:cell, x:xcur, y:ycur } );
 							}
 							ycur = yc - dy;
 							if (xcur >= 0 && xcur < width && ycur >= 0 && ycur < height)
 							{
-								cell = cells.getChildByName("cell_" + ycur + "_" + xcur) as MovieClip;
+								cell = cells[ycur][xcur] as MovieClip;
 								array.push( { cell:cell, x:xcur, y:ycur } );
 							}
 						}
@@ -217,7 +228,7 @@ package view.menu
 			
 			if (glowCenter && xc >= 0 && xc < width && yc >= 0 && yc < height)
 			{
-				cell = cells.getChildByName("cell_" + yc + "_" + xc) as MovieClip;
+				cell = cells[yc][xc] as MovieClip;
 				array.push( { cell:cell, x:xc, y:yc } );
 			}
 			
@@ -227,7 +238,7 @@ package view.menu
 			if (!isActionArea)
 			{
 				// Будем просмотривать только те ячейки, которые являются препятствиями
-				var obstacles:Array = getObstacles(xc, yc);
+				var obstacles:Array = getObstacles(array, xc, yc);
 				// Удалим ячейки закрытые препятствиями
 				array = reduceCellsByObstacles(xc, yc, array, obstacles);
 				initCellsForChoising(array);
@@ -327,15 +338,15 @@ package view.menu
 		/**
 		 * Функция возвращает массив точек, таких что клетки на соответствующих
 		 * координатах являются препятствием.
+		 * Функция получает массив объектов вида { cell:cell, x:x, y:y }
 		 * @return
 		 */
-		private function getObstacles(exceptX:int, exceptY:int):Array
+		private function getObstacles(cells:Array, exceptX:int, exceptY:int):Array
 		{
 			var r:Array = [];
-			/*for (var i:int = 0; i < _mainModel.fightInfo.sizeY; i++)
-				for (var j:int = 0; j < _mainModel.fightInfo.sizeX; j++)
-					if (!(exceptX == j && exceptY == i) && _mainModel.fightInfo.cells[i][j] & EFFECT_OBSTACLE)
-						r.push(new Point(j, i));*/
+			for (var i:int = 0; i < cells.length; i++)
+				if (!(exceptX == cells[i].x && exceptY == cells[i].y) && cells[i].cell.info.type == CT_WALL)
+					r.push(new Point(cells[i].x, cells[i].y));
 			return r;
 		}
 		
@@ -345,11 +356,11 @@ package view.menu
 		 */
 		private function glowActionAreaCells(cells:Array):void
 		{
-			/*for (var i:int = 0; i < cells.length; i++)
+			for (var i:int = 0; i < cells.length; i++)
 			{
 				var o:Object = cells[i];
 				// Проверим можно ли атаковать эту ячейку
-				if (_mainModel.fightInfo.cells[o.y][o.x] & EFFECT_ATTACK)
+				//if (_mainModel.fightInfo.cells[o.y][o.x] & EFFECT_ATTACK)
 				{
 					if (_glowedActionRange.indexOf(o.cell) < 0)
 					{
@@ -357,16 +368,16 @@ package view.menu
 						o.cell.gotoAndStop("red");
 					}
 				}
-			}*/
+			}
 		}
 
 		private function removeActionAreaGlowing():void
 		{
-			/*while (_glowedActionRange.length)
+			while (_glowedActionRange.length)
 			{
 				var cell:MovieClip = _glowedActionRange.pop() as MovieClip;
 				cell.gotoAndStop(cell.previousState);
-			}*/
+			}
 		}
 
 		/**
@@ -375,26 +386,27 @@ package view.menu
 		 */
 		private function initCellsForChoising(cells:Array):void
 		{
-			/*for (var i:int = 0; i < cells.length; i++)
+			for (var i:int = 0; i < cells.length; i++)
 			{
 				var o:Object = cells[i];
 				// Сохраняем ячейку в массиве _glowedCells
 				// Здесь проверяем нет ли какого игрока на этой ячейке.
-				var canGlow:Boolean = true;
-				if (_currentAction == FightSkills.ACTION_SIMPLE_WALK)
+				//var canGlow:Boolean = true;
+				var canGlow:Boolean = o.cell.info.type == CT_FLOOR;
+				/*if (_currentAction == FightSkills.ACTION_SIMPLE_WALK)
 					canGlow = Boolean(_mainModel.fightInfo.cells[o.y][o.x] & EFFECT_WALK);
 				else
-					canGlow = Boolean(_mainModel.fightInfo.cells[o.y][o.x] & EFFECT_ATTACK);
+					canGlow = Boolean(_mainModel.fightInfo.cells[o.y][o.x] & EFFECT_ATTACK);*/
 				if (canGlow)
 				{
 					_glowedCells.push(o.cell);
-					o.cell.gotoAndStop("gray");
-					o.cell.previousState = "gray";
-					o.cell.addEventListener(MouseEvent.ROLL_OVER, rollOverGlowedCellHandler);
+					o.cell.gotoAndStop("green");
+					o.cell.previousState = "green";
+					/*o.cell.addEventListener(MouseEvent.ROLL_OVER, rollOverGlowedCellHandler);
 					o.cell.addEventListener(MouseEvent.ROLL_OUT, rollOutGlowedCellHandler);
-					o.cell.addEventListener(MouseEvent.MOUSE_DOWN, mouseDownGlowedCellHandler);
+					o.cell.addEventListener(MouseEvent.MOUSE_DOWN, mouseDownGlowedCellHandler);*/
 				}
-			}*/
+			}
 		}
 		
 	}
