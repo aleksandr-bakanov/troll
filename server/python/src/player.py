@@ -141,6 +141,8 @@ class Player:
 					operatedBytes += self.cCreateBid(data[operatedBytes:])
 				elif comId == C_CHAT_MESSAGE:
 					operatedBytes += self.cChatMessage(data[operatedBytes:])
+				elif comId == C_WANT_MOVE:
+					operatedBytes += self.cWantMove(data[operatedBytes:])
 				# После обработки одной команды смотрим, есть ли еще
 				# что обработать.
 				# Если мы обработали все байты, переданные нам, возвращаем
@@ -217,6 +219,16 @@ class Player:
 		comSize = mesLen + SHORT_SIZE * 2;
 		self.sendData(pack('<ihh' + str(mesLen) + 's',
 			comSize, S_CHAT_MESSAGE, mesLen, mes.encode('utf-8')))
+
+	def sMoveUnit(self, id, path):
+		data = pack('<hbb', S_MOVE_UNIT, id, len(path) / 2)
+		comSize = 4
+		for c in path:
+			data += pack('<h', c)
+			comSize += CHAR_SIZE
+		data = pack('<i', comSize) + data
+		self.sendData(data)
+		
 	
 	# ==================================================================
 	# Функции-обработчики команд клиента
@@ -386,6 +398,14 @@ class Player:
 		if self.fightController:
 			self.fightController.sendChatMessage(mes)
 		return SHORT_SIZE + len(mes)
+
+	def cWantMove(self, data):
+		x = getShort(data, 0)
+		y = getShort(data, 2)
+		print "Player::cWantMove", x, y
+		if self.fightController:
+			self.fightController.unitWantMove(self, x, y)
+		return SHORT_SIZE * 2
 
 	# ==================================================================
 	# Прочие функции

@@ -3,6 +3,7 @@ package control
 	import by.blooddy.crypto.MD5;
 	import by.blooddy.crypto.serialization.JSON;
 	import flash.events.*;
+	import flash.geom.Point;
 	import flash.net.*;
 	import flash.utils.*;
 	import model.*;
@@ -36,6 +37,14 @@ package control
 		public static const S_AREA_OPEN:int = 29;
 		public static const S_KEYS_OPEN:int = 31;
 		public static const S_CHAT_MESSAGE:int = 33;
+		public static const S_FINISH_FIGHT:int = 35;
+		public static const S_YOUR_MOVE:int = 37;
+		public static const S_MOVE_UNIT:int = 39;
+		public static const S_UNIT_CHANGE_WEAPON:int = 41;
+		public static const S_UNIT_ATTACK:int = 43;
+		public static const S_UNIT_DAMAGE:int = 45;
+		public static const S_UNIT_ACTION:int = 47;
+		public static const S_CHANGE_CELL:int = 49;
 
 		// Client side
 		public static const C_LOGIN:int = 2;
@@ -50,6 +59,10 @@ package control
 		public static const C_EXIT_BID:int = 20;
 		public static const C_CREATE_BID:int = 22;
 		public static const C_CHAT_MESSAGE:int = 24;
+		public static const C_WANT_MOVE:int = 26;
+		public static const C_CHANGE_WEAPON:int = 28;
+		public static const C_ATTACK:int = 30;
+		public static const C_ACTION:int = 32;
 		
 		private var _socket:Socket;
 		private var _lastComSize:int;
@@ -81,18 +94,7 @@ package control
 			Dispatcher.instance.addEventListener(UserEvent.EXIT_BID, cExitBid);
 			Dispatcher.instance.addEventListener(UserEvent.ENTER_BID, cEnterBid);
 			Dispatcher.instance.addEventListener(UserEvent.C_CHAT_MESSAGE, cChatMessage);
-		}
-		
-		private function cChatMessage(e:UserEvent):void 
-		{
-			var mes:String = e.data as String;
-			var ba:ByteArray = new ByteArray();
-			ba.endian = Endian.LITTLE_ENDIAN;
-			ba.writeShort(C_CHAT_MESSAGE);
-			ba.writeUTF(mes);
-			_socket.writeInt(ba.length);
-			_socket.writeBytes(ba);
-			_socket.flush();
+			Dispatcher.instance.addEventListener(UserEvent.C_WANT_MOVE, cWantMove);
 		}
 		
 		private function configureSocket():void
@@ -181,15 +183,10 @@ package control
 				case S_START_FIGHT_INFO: sStartFightInfo(); break;
 				case S_AREA_OPEN: sAreaOpen(); break;
 				case S_CHAT_MESSAGE: sChatMessage(); break;
+				case S_MOVE_UNIT: sMoveUnit(); break;
 				default: break;
 			}
 			_lastComSize = 0;
-		}
-		
-		private function sChatMessage():void 
-		{
-			var mes:String = _socket.readUTF();
-			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.S_CHAT_MESSAGE, mes));
 		}
 		
 		//=============================================================
@@ -354,6 +351,27 @@ package control
 			}
 			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.AREA_OPEN, cells));
 		}
+		
+		private function sChatMessage():void 
+		{
+			var mes:String = _socket.readUTF();
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.S_CHAT_MESSAGE, mes));
+		}
+		
+		private function sMoveUnit():void 
+		{
+			var id:int = _socket.readByte();
+			var steps:int = _socket.readByte();
+			var path:Array = [];
+			for (var i:int = 0; i < steps; i++)
+			{
+				var x:int = _socket.readShort();
+				var y:int = _socket.readShort();
+				path.push(new Point(x, y));
+			}
+			if (path.length)
+				Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.MOVE_UNIT, { id:id, path:path } ));
+		}
 
 
 		//=============================================================
@@ -461,6 +479,28 @@ package control
 			_socket.writeInt(4);
 			_socket.writeShort(C_ENTER_BID);
 			_socket.writeShort(e.data as int);
+			_socket.flush();
+		}
+		
+		private function cChatMessage(e:UserEvent):void 
+		{
+			var mes:String = e.data as String;
+			var ba:ByteArray = new ByteArray();
+			ba.endian = Endian.LITTLE_ENDIAN;
+			ba.writeShort(C_CHAT_MESSAGE);
+			ba.writeUTF(mes);
+			_socket.writeInt(ba.length);
+			_socket.writeBytes(ba);
+			_socket.flush();
+		}
+		
+		private function cWantMove(e:UserEvent):void 
+		{
+			var point:Point = e.data as Point;
+			_socket.writeInt(6);
+			_socket.writeShort(C_WANT_MOVE);
+			_socket.writeShort(point.x);
+			_socket.writeShort(point.y);
 			_socket.flush();
 		}
 

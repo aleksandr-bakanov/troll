@@ -35,6 +35,8 @@ package control
 		public static const AREA_OPEN:String = "area_open";
 		public static const S_CHAT_MESSAGE:String = "s_chat_message";
 		public static const C_CHAT_MESSAGE:String = "c_chat_message";
+		public static const C_WANT_MOVE:String = "c_want_move";
+		public static const MOVE_UNIT:String = "move_unit";
 		
 		public var data:Object;
 		

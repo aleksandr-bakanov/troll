@@ -1,5 +1,6 @@
 package view.menu 
 {
+	import com.greensock.TweenLite;
 	import control.Dispatcher;
 	import control.UserEvent;
 	import flash.display.DisplayObject;
@@ -37,6 +38,8 @@ package view.menu
 		public static const ACT_WALK:int = 1;
 		public static const ACT_ATTACK:int = 2;
 		public static const ACT_CHANGE_WEAPON:int = 3;
+		// TweenLite константы
+		public static const STEP_DURATION:Number = 0.5;
 		
 		public var module:FightWindow_asset;
 		private var _model:MainModel;
@@ -63,6 +66,7 @@ package view.menu
 			Dispatcher.instance.addEventListener(UserEvent.START_FIGHT, startFight);
 			Dispatcher.instance.addEventListener(UserEvent.AREA_OPEN, areaOpen);
 			Dispatcher.instance.addEventListener(UserEvent.S_CHAT_MESSAGE, sChatMessage);
+			Dispatcher.instance.addEventListener(UserEvent.MOVE_UNIT, moveUnit);
 			
 			module.enter.addEventListener(MouseEvent.CLICK, enterHandler);
 		}
@@ -135,6 +139,7 @@ package view.menu
 						floor[info.y] = [];
 					// Не забыть про type.
 					var cell:Cell_asset = new Cell_asset();
+					cell.addEventListener(MouseEvent.CLICK, cellClickHandler);
 					cell.info = info;
 					if (info.type == CT_FLOOR) cell.gotoAndStop("floor");
 					else cell.gotoAndStop("wall");
@@ -146,8 +151,28 @@ package view.menu
 				}
 			}
 			
-			var o:Object = _model.fInfo.players["0"];
-			glowRadius(0, floor[0].length, floor.length, o.x, o.y, 0, 3);
+			//var o:Object = _model.fInfo.players["0"];
+			//glowRadius(0, floor[0].length, floor.length, o.x, o.y, 0, 3);
+		}
+		
+		private function cellClickHandler(e:MouseEvent):void 
+		{
+			var cell:Cell_asset = e.currentTarget as Cell_asset;
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.C_WANT_MOVE, new Point(cell.info.x, cell.info.y)));
+		}
+		
+		private function moveUnit(e:UserEvent):void 
+		{
+			var player:Player_asset = _players[e.data.id] as Player_asset;
+			moveUnitByPath(player, e.data.path as Array);
+		}
+		
+		private function moveUnitByPath(unit:DisplayObject, path:Array):void
+		{
+			if (!path.length) return;
+			var point:Point = path.shift() as Point;
+			TweenLite.to(unit, STEP_DURATION, { x:point.x * CELL_WIDTH + (point.y % 2 ? CELL_WIDTH / 2 : 0), y:point.y * CELL_HEIGHT * 0.75,
+				onComplete:moveUnitByPath, onCompleteParams:[unit, path] } );
 		}
 		
 		/**
