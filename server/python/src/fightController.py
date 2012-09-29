@@ -1,4 +1,5 @@
 # coding=utf-8
+from math import *
 from consts import *
 from random import shuffle
 from struct import pack
@@ -52,8 +53,8 @@ class FightController:
 		# Пока (и впредь?) будем расставлять игроков
 		# так, чтобы в первый ход не пришлось встраивать в порядок
 		# ходов мобов.
-		self.players[0].fInfo["x"] = 1
-		self.players[0].fInfo["y"] = 1
+		self.players[0].fInfo["x"] = 2
+		self.players[0].fInfo["y"] = 3
 		self.players[0].fInfo["floor"] = 0
 		self.players[0].fInfo["id"] = 0
 		
@@ -61,10 +62,10 @@ class FightController:
 		self.moveOrder = self.createMoveOrder()
 		self.sendStartInfo()
 		# Отправляем известную территорию
-		area = self.knownArea[:]
-		area[0].insert(0, 0)
-		self.sendAreaOpen(area)
-		del area[0][0]
+		#area = self.knownArea[:]
+		#area[0].insert(0, 0)
+		self.sendAreaOpen(self.knownArea)
+		#del area[0][0]
 		
 	# Отправка клиентам начальной информации о бое.
 	def sendStartInfo(self):
@@ -90,32 +91,26 @@ class FightController:
 				p.sendData(data + pack('<b', playerId))
 			playerId += 1
 
-	# В эту функцию следует подавать уже подготовленный трехмерный массив.
-	# area = [ [floor_id, cell, cell, ... ], ... ]
+	# В эту функцию следует подавать уже подготовленный двумерный массив.
+	# area = [ [cell, cell, ... ], ... ]
 	def sendAreaOpen(self, area):
 		comSize = 0
+		# Пишем CMD_ID и floors_count
 		data = pack('<hb', S_AREA_OPEN, len(area))
 		comSize += 3
-		for f in area:
-			floorId = f[0]
-			f = f[1:]
-			
-			cellsCount = 0
-			for a in f:
-				for b in a:
-					cellsCount += 1
-			data += pack('<bh', floorId, cellsCount)
-			comSize += 3
-			
-			for line in f:
-				for c in line:
-					data += pack('<hhb', c.x, c.y, c.type)
+		floorId = 0
+		for floor in area:
+			cellsCount = len(floor)
+			if cellsCount:
+				data += pack('<bh', floorId, cellsCount)
+				comSize += 3
+				for cell in floor:
+					data += pack('<hhb', cell.x, cell.y, cell.type)
 					comSize += 5
-					if c.type == CT_WALL:
-						# Пока стены будут нерушимы, а потом wall_hp будем
-						# доставать из cell.
-						data += pack('<b', c.hp)
+					if cell.type == CT_WALL:
+						data += pack('<b', cell.hp)
 						comSize += 1
+			floorId += 1
 		data = pack('<i', comSize) + data
 		for p in self.players:
 			if p:
@@ -141,10 +136,38 @@ class FightController:
 		del self.players
 		del self.map
 		del self.knownArea
+		print "FightController deleted."
 
 	# Временная функция. Ее следует заменить на sendOpenedArea.
 	def getKnownArea(self):
-		return self.map[:]
+		result = []
+		# Создаем этажи
+		#fl = 0
+		for floor in self.map:
+			result.append([])
+		#	for line in floor:
+		#		for c in line:
+		#			result[fl].append(c)
+		#	fl += 1
+		#return result
+
+		# Следует заметить, что в self.knownArea хранится не трехмерный список,
+		# а двумерный. Т.е. этаж является одномерным списком перечисляющим
+		# известные игрокам клетки.
+		for p in self.players:
+			if p:
+				floorId = p.fInfo["floor"]
+				floorHeight = len(self.map[floorId])
+				floorWidth = len(self.map[floorId][0])
+				xc = p.fInfo["x"]
+				yc = p.fInfo["y"]
+				area = self.getCellsInRadius(floorId, floorWidth, floorHeight, xc, yc, 0, 2, True, True)
+				inResult = set(result[floorId])
+				inArea = set(area)
+				newArea = inArea - inResult
+				result[floorId] = result[floorId] + list(newArea)
+		return result
+
 
 	def createMap(self):
 		map = [[]]
@@ -439,202 +462,130 @@ class FightController:
 #=======================================================================
 # Алгоритм нахождения ячеек видимых из данной ячейки
 #=======================================================================
-/**
- * Подсветка ячеек на расстоянии radius от ячейки, координаты
- * которой указаны в center. Если isActionArea == true, ячейки подсвечиваются красным,
- * иначе - серым.
- * @param	center
- * @param	radius
- * @param	isActionArea
- */
-private function glowRadius(floorId:int, width:int, height:int, xc:int, yc:int, r1:int, r2:int, glowCenter:Boolean = false, isActionArea:Boolean = false):void
-{
-	var cells:Array = _cells[floorId] as Array;
-	// Проверка на неверные данные
-	if (width <= 0 || height <= 0 || !cells || yc < 0 || yc >= height || xc < 0 || xc >= width || r1 < 0 || r2 < 0 || (r1 >= r2 && r2 > 0))
-		return;
-	
-	// Массив, в который будут собираться объекты вида { cell:cell, x:x, y:y }
-	var array:Array = [];
-	
-	// Начальные значения переменных
-	var lenStart:int = r2 * 2 + 1;
-	var length:int = lenStart;
-	var countDiscard:int = r1 * 2 + 1;
-	var countAllow:int = length - countDiscard;
-	var xs:int = xc - r2;
-	var xe:int = xs + length - 1;
-	var xcur:int = xs;
-	var ycur:int = 0;
-	var dy:int = 0;
-	var cell:MovieClip;
-	// Проходимся по вертикали r2 количество раз
-	for (var a:int = 0; a <= r2 && r2 > 0; a++)
-	{
-		// Начинаем с центральной полосы
-		for (var b:int = 0; b < length; b++)
-		{
-			if ((Math.abs(xs - xcur) < (countAllow / 2)) || (Math.abs(xe - xcur) < (countAllow / 2)))
-			{
-				if (dy == 0)
-				{
-					ycur = yc;
-					if (xcur >= 0 && xcur < width)
-					{
-						cell = cells[ycur][xcur] as MovieClip;
-						array.push( { cell:cell, x:xcur, y:ycur } );
-					}
-				}
-				else
-				{
-					ycur = yc + dy;
-					if (xcur >= 0 && xcur < width && ycur >= 0 && ycur < height)
-					{
-						cell = cells[ycur][xcur] as MovieClip;
-						array.push( { cell:cell, x:xcur, y:ycur } );
-					}
-					ycur = yc - dy;
-					if (xcur >= 0 && xcur < width && ycur >= 0 && ycur < height)
-					{
-						cell = cells[ycur][xcur] as MovieClip;
-						array.push( { cell:cell, x:xcur, y:ycur } );
-					}
-				}
-			}
-			xcur++;
-		}
-		// При переходе на следующую полосу корректируем значения переменных
-		if (((yc + a) % 2) > 0) 
-			xs++;
-		xcur = xs;
+	# Функция возвращает список ячеек на расстоянии radius от ячейки (xc;yc).
+	# Если флаг checkObstacles установлен, будет проведена дополнительная проверка
+	# на загораживание ячеек препятствиями.
+	def getCellsInRadius(self, floorId, width, height, xc, yc, r1, r2, includeCenter = False, checkObstacles = False):
+		cells = self.map[floorId]
+		# Проверка на неверные данные
+		if width <= 0 or height <= 0 or not cells or yc < 0 or yc >= height or xc < 0 or xc >= width or r1 < 0 or r2 < 0 or (r1 >= r2 and r2 > 0):
+			return []
 		
-		length--;
-		countDiscard--;
-		dy++;
-		countAllow = length - (dy <= r1 ? countDiscard : 0);
-		xe = xs + length - 1;
-	}
-	
-	if (glowCenter && xc >= 0 && xc < width && yc >= 0 && yc < height)
-	{
-		cell = cells[yc][xc] as MovieClip;
-		array.push( { cell:cell, x:xc, y:yc } );
-	}
-	
-	// Теперь, если ячейки необходимо подсветить серым цветом, т.е. не для показа радиуса
-	// зонной атаки, нужно исключить из массива те ячейки которые будут недоступны из-за
-	// препятствий на поле.
-	if (!isActionArea)
-	{
-		// Будем просмотривать только те ячейки, которые являются препятствиями
-		var obstacles:Array = getObstacles(array, xc, yc);
-		// Удалим ячейки закрытые препятствиями
-		array = reduceCellsByObstacles(xc, yc, array, obstacles);
-		initCellsForChoising(array);
-	}
-	else
-		glowActionAreaCells(array);
-}
-
-/**
- * Функция удаляет из массива cells те ячейки, которые перекрываются препятствиями,
- * представленными в массиве obstacles.
- * @param	xc
- * @param	yc
- * @param	cells		массив объектов вида { cell:cell, x:x, y:y }
- * @param	obstacles	массив точек, представляющих координаты ячеек-препятствий
- */
-private function reduceCellsByObstacles(xc:int, yc:int, cells:Array, obstacles:Array):Array
-{
-	// Проходимся по всем ячейкам, содержащимся в cells
-	for (var i:int = 0; i < cells.length; i++)
-	{
-		var o:Object = cells[i];
-		if (isObstacled(xc, yc, o.x, o.y, obstacles))
-		{
-			cells.splice(i--, 1);
-		}
-	}
-	return cells;
-}
-
-/**
- * Функция возвращает true если точку cell при наблюдении из (xc;yc) загораживает
- * какое-нибудь препятствие из obstacles.
- * @param	xc
- * @param	yc
- * @param	toX
- * @param	toY
- * @param	obstacles
- * @return
- */
-private function isObstacled(xc:int, yc:int, toX:int, toY:int, obstacles:Array):Boolean
-{
-	// Визуальные координаты
-	var vxc:Number = Number(xc) * VISUAL_CELL_WIDTH + (yc % 2 ? VISUAL_CELL_WIDTH / 2.0 : 0);
-	var vyc:Number = Number(yc) * VISUAL_CELL_HEIGHT * 0.75;
-	var vtoX:Number = Number(toX) * VISUAL_CELL_WIDTH + (toY % 2 ? VISUAL_CELL_WIDTH / 2.0 : 0);
-	var vtoY:Number = Number(toY) * VISUAL_CELL_HEIGHT * 0.75;
-	
-	// Анализируем все препятствия
-	for (var i:int = 0; i < obstacles.length; i++)
-	{
-		// Визуальные координаты текущего препятствие
-		var vox:Number = obstacles[i].x * VISUAL_CELL_WIDTH + (int(obstacles[i].y) % 2 ? VISUAL_CELL_WIDTH / 2.0 : 0);
-		var voy:Number = obstacles[i].y * VISUAL_CELL_HEIGHT * 0.75;
+		# Массив, в который будут собираться объекты Cell
+		array = []
 		
-		// Во-первых узнаем, если расстояние до текущего препятствия больше
-		// чем до целевой точки, можно пропустить это препятствие.
-		if (Math.sqrt(Math.pow(vxc - vox, 2) + Math.pow(vyc - voy, 2)) > Math.sqrt(Math.pow(vxc - vtoX, 2) + Math.pow(vyc - vtoY, 2)))
-			continue;
+		# Начальные значения переменных
+		lenStart = r2 * 2 + 1
+		length = lenStart
+		countDiscard = r1 * 2 + 1
+		countAllow = length - countDiscard
+		xs = xc - r2
+		xe = xs + length - 1
+		xcur = xs
+		ycur = 0
+		dy = 0
+		# Проходимся по вертикали r2 + 1 количество раз если r2 > 0
+		if r2 > 0:
+			for a in range(r2 + 1):
+				# Начинаем с центральной полосы
+				for b in range(length):
+					if (abs(xs - xcur) < (countAllow / 2.0)) or (abs(xe - xcur) < (countAllow / 2.0)):
+						if dy == 0:
+							ycur = yc
+							if xcur >= 0 and xcur < width:
+								array.append(cells[ycur][xcur])
+						else:
+							ycur = yc + dy
+							if xcur >= 0 and xcur < width and ycur >= 0 and ycur < height:
+								array.append(cells[ycur][xcur])
+							ycur = yc - dy
+							if xcur >= 0 and xcur < width and ycur >= 0 and ycur < height:
+								array.append(cells[ycur][xcur])
+					xcur += 1
+				# При переходе на следующую полосу корректируем значения переменных
+				if ((yc + a) % 2) > 0:
+					xs += 1
+				xcur = xs
+				
+				length -= 1
+				countDiscard -= 1
+				dy += 1
+				countAllow = length - (countDiscard if dy <= r1 else 0)
+				xe = xs + length - 1
 		
-		// Иначе составляем нормальное уравнение прямой (по координатам точки наблюдения и препятствия)
-		// и выясняем расстояние от целевой точки до этой прямой.
-		// Если это расстояние меньше чем VISUAL_CELL_RADIUS, значит клетка не видна из точки наблюдения.
-		var d:Number = getPerpDistance(vxc, vyc, vtoX, vtoY, vox, voy);
-		if (d < VISUAL_CELL_RADIUS && !(toX == int(obstacles[i].x) && toY == int(obstacles[i].y)))
-		{
-			var R:Number = Math.sqrt(Math.pow(vtoX - vox, 2) + Math.pow(vtoY - voy, 2));
-			var L:Number = Math.sqrt(Math.pow(vxc - vtoX, 2) + Math.pow(vyc - vtoY, 2));
-			if (R < L) {
-				return true;
-			}
-		}
-	}
-	return false;
-}
+		if includeCenter and xc >= 0 and xc < width and yc >= 0 and yc < height:
+			array.append(cells[yc][xc])
+		
+		# Теперь, если ячейки необходимо подсветить серым цветом, т.е. не для показа радиуса
+		# зонной атаки, нужно исключить из массива те ячейки которые будут недоступны из-за
+		# препятствий на поле.
+		if checkObstacles:
+			# Будем просмотривать только те ячейки, которые являются препятствиями
+			obstacles = self.getObstacles(array, xc, yc)
+			# Удалим ячейки закрытые препятствиями
+			array = self.reduceCellsByObstacles(xc, yc, array, obstacles)
 
-/**
- * Функция возвращает расстояние от точки (vtoX, vtoY) до прямой, проходящей через
- * точки (vxc, vyc) и (vox, voy).
- * @param	vxc
- * @param	vyc
- * @param	vox
- * @param	voy
- * @param	vtoX
- * @param	vtoY
- * @return
- */
-private function getPerpDistance(vxc:Number, vyc:Number, vtoX:Number, vtoY:Number, vox:Number, voy:Number):Number
-{
-	var A:Number = vyc - vtoY;
-	var B:Number = vtoX - vxc;
-	var C:Number = vxc * vtoY - vtoX * vyc;
-	var d:Number = Math.abs( Number(A * vox + B * voy + C) / Math.sqrt(A * A + B * B) );
-	return d;
-}
+		return array
 
-/**
- * Функция возвращает массив точек, таких что клетки на соответствующих
- * координатах являются препятствием.
- * Функция получает массив объектов вида { cell:cell, x:x, y:y }
- * @return
- */
-private function getObstacles(cells:Array, exceptX:int, exceptY:int):Array
-{
-	var r:Array = [];
-	for (var i:int = 0; i < cells.length; i++)
-		if (!(exceptX == cells[i].x && exceptY == cells[i].y) && cells[i].cell.info.type == CT_WALL)
-			r.push(new Point(cells[i].x, cells[i].y));
-	return r;
-}
+
+	# Функция удаляет из массива cells те ячейки, которые перекрываются препятствиями,
+	# представленными в массиве obstacles.
+	def reduceCellsByObstacles(self, xc, yc, cells, obstacles):
+		# Проходимся по всем ячейкам, содержащимся в cells
+		for cell in cells:
+			if self.isObstacled(xc, yc, cell.x, cell.y, obstacles):
+				cells.remove(cell)
+		return cells
+
+	
+	# Функция возвращает true если точку (toX;toY) при наблюдении из (xc;yc) загораживает
+	# какое-нибудь препятствие из obstacles.
+	# @param	obstacles - массив объектов Cell
+	def isObstacled(self, xc, yc, toX, toY, obstacles):
+		# Визуальные координаты
+		vxc = xc * VISUAL_CELL_WIDTH + (VISUAL_CELL_WIDTH / 2.0 if yc % 2 else 0)
+		vyc = yc * VISUAL_CELL_HEIGHT * 0.75
+		vtoX = toX * VISUAL_CELL_WIDTH + (VISUAL_CELL_WIDTH / 2.0 if toY % 2 else 0)
+		vtoY = toY * VISUAL_CELL_HEIGHT * 0.75
+		
+		# Анализируем все препятствия
+		for obstacle in obstacles:
+			# Визуальные координаты текущего препятствия
+			vox = obstacle.x * VISUAL_CELL_WIDTH + (VISUAL_CELL_WIDTH / 2.0 if obstacle.y % 2 else 0)
+			voy = obstacle.y * VISUAL_CELL_HEIGHT * 0.75
+			
+			# Во-первых узнаем, если расстояние до текущего препятствия больше
+			# чем до целевой точки, можно пропустить это препятствие.
+			if sqrt(pow(vxc - vox, 2) + pow(vyc - voy, 2)) > sqrt(pow(vxc - vtoX, 2) + pow(vyc - vtoY, 2)):
+				continue
+			
+			# Иначе составляем нормальное уравнение прямой (по координатам точки наблюдения и препятствия)
+			# и выясняем расстояние от целевой точки до этой прямой.
+			# Если это расстояние меньше чем VISUAL_CELL_RADIUS, значит клетка не видна из точки наблюдения.
+			d = self.getPerpDistance(vxc, vyc, vtoX, vtoY, vox, voy)
+			if d < VISUAL_CELL_RADIUS and not (toX == obstacle.x and toY == obstacle.y):
+				R = sqrt(pow(vtoX - vox, 2) + pow(vtoY - voy, 2))
+				L = sqrt(pow(vxc - vtoX, 2) + pow(vyc - vtoY, 2))
+				if R < L:
+					return True
+		return False
+
+	
+	# Функция возвращает расстояние от точки (vtoX, vtoY) до прямой, проходящей через
+	# точки (vxc, vyc) и (vox, voy).
+	def getPerpDistance(self, vxc, vyc, vtoX, vtoY, vox, voy):
+		A = vyc - vtoY
+		B = vtoX - vxc
+		C = vxc * vtoY - vtoX * vyc
+		d = abs( (A * vox + B * voy + C) / sqrt(A * A + B * B) )
+		return d
+
+	# Функция возвращает массив точек, таких что клетки на соответствующих
+	# координатах являются препятствием.
+	# Функция получает массив объектов вида класса Cell
+	def getObstacles(self, cells, exceptX, exceptY):
+		r = []
+		for cell in cells:
+			if not (exceptX == cell.x and exceptY == cell.y) and cell.type == CT_WALL:
+				r.append(cell)
+		return r

@@ -151,8 +151,8 @@ package view.menu
 				}
 			}
 			
-			//var o:Object = _model.fInfo.players["0"];
-			//glowRadius(0, floor[0].length, floor.length, o.x, o.y, 0, 3);
+			/*var o:Object = _model.fInfo.players["0"];
+			glowRadius(0, floor[0].length, floor.length, o.x, o.y, 0, 2);*/
 		}
 		
 		private function cellClickHandler(e:MouseEvent):void 
@@ -210,6 +210,8 @@ package view.menu
 				// Начинаем с центральной полосы
 				for (var b:int = 0; b < length; b++)
 				{
+					//if (dy == 2 && xcur == 2)
+						//Debug.out( "("+Math.abs(xs - xcur)+" < "+(countAllow / 2)+") || ("+Math.abs(xe - xcur)+" < "+(countAllow / 2)+")" );
 					if ((Math.abs(xs - xcur) < (countAllow / 2)) || (Math.abs(xe - xcur) < (countAllow / 2)))
 					{
 						if (dy == 0)
@@ -256,6 +258,8 @@ package view.menu
 				cell = cells[yc][xc] as MovieClip;
 				array.push( { cell:cell, x:xc, y:yc } );
 			}
+			
+			//Debug.out("array.length = " + array.length);
 			
 			// Теперь, если ячейки необходимо подсветить серым цветом, т.е. не для показа радиуса
 			// зонной атаки, нужно исключить из массива те ячейки которые будут недоступны из-за

@@ -45,6 +45,9 @@ class Player:
 		self.initBackpack()
 		self.sendBidsList()
 
+	def __del__(self):
+		print "Player (", self.id, self.name, ") deleted."
+
 	# ==================================================================
 	# Две основные функции run и parse
 	# ==================================================================
@@ -402,7 +405,6 @@ class Player:
 	def cWantMove(self, data):
 		x = getShort(data, 0)
 		y = getShort(data, 2)
-		print "Player::cWantMove", x, y
 		if self.fightController:
 			self.fightController.unitWantMove(self, x, y)
 		return SHORT_SIZE * 2
