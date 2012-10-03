@@ -627,11 +627,13 @@ def parse(data, socket, db, bids):
 		# в базе данных нет.
 		if not rc:
 			sendData(socket, pack('<ihb', 3, S_LOGIN_FAILURE, 1))
+			return
 		# Достаем данные
 		data = cursor.fetchall()[0]
 		# Если кто-то уже играет под этим логином, уходим
 		if data[1] == 1:
 			sendData(socket, pack('<ihb', 3, S_LOGIN_FAILURE, 2))
+			return
 		# А если нет, отмечаем что данный логин уже занят
 		cursor.execute("UPDATE user SET is_playing=1 WHERE id=%s", (data[0],))
 		db.commit()

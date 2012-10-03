@@ -161,7 +161,7 @@ class FightController:
 				floorWidth = len(self.map[floorId][0])
 				xc = p.fInfo["x"]
 				yc = p.fInfo["y"]
-				area = self.getCellsInRadius(floorId, floorWidth, floorHeight, xc, yc, 0, 2, True, True)
+				area = self.getCellsInRadius(floorId, floorWidth, floorHeight, xc, yc, 0, 3, True, True)
 				inResult = set(result[floorId])
 				inArea = set(area)
 				newArea = inArea - inResult
@@ -515,7 +515,6 @@ class FightController:
 		
 		if includeCenter and xc >= 0 and xc < width and yc >= 0 and yc < height:
 			array.append(cells[yc][xc])
-		
 		# Теперь, если ячейки необходимо подсветить серым цветом, т.е. не для показа радиуса
 		# зонной атаки, нужно исключить из массива те ячейки которые будут недоступны из-за
 		# препятствий на поле.
@@ -532,9 +531,26 @@ class FightController:
 	# представленными в массиве obstacles.
 	def reduceCellsByObstacles(self, xc, yc, cells, obstacles):
 		# Проходимся по всем ячейкам, содержащимся в cells
-		for cell in cells:
-			if self.isObstacled(xc, yc, cell.x, cell.y, obstacles):
-				cells.remove(cell)
+		clen = len(cells)
+		i = 0
+		while i < clen:
+			cell = cells[i]
+			r = self.isObstacled(xc, yc, cell.x, cell.y, obstacles)
+			if r:
+				a = cells[0:i]
+				b = cells[i+1:]
+				cells = a + b
+				i -= 1
+				clen -= 1
+			i += 1
+		
+		# А вот такой цикл чего-то не работает, видимо плохо я знаю Python,
+		# приходится изворачиваться C-подобными циклами
+		#for cell in cells:
+		#	r = self.isObstacled(xc, yc, cell.x, cell.y, obstacles)
+		#	print "isO: toX =",cell.x," toY =",cell.y," res =",r
+		#	if r:
+		#		cells.remove(cell)
 		return cells
 
 	
