@@ -12,6 +12,7 @@ package view.menu
 	import flash.utils.Dictionary;
 	import model.MainModel;
 	import view.common.Debug;
+	import view.fight.Unit;
 	
 	/**
 	 * ...
@@ -45,7 +46,7 @@ package view.menu
 		private var _model:MainModel;
 		private var _cells:Object = { };
 		private var _floors:Object = { };
-		private var _players:Object = { };
+		private var _units:Object = { };
 		// Текущее действие выбранное игроком
 		private var _currentAction:int;
 		// Игроков будем добавлять на уровни addChild. Новые ячейки будем добавлять на уровни addChildAt(cell, 0).
@@ -100,11 +101,11 @@ package view.menu
 				var floor:Sprite = _floors[o.floorId] as Sprite;
 				// Показываем этаж если мы на нем находимся.
 				module.map.addChild(floor);
-				var player:Player_asset = new Player_asset();
+				var player:Unit = new Unit();
 				player.x = o.x * CELL_WIDTH + (o.y % 2 ? CELL_WIDTH / 2 : 0);
 				player.y = o.y * CELL_HEIGHT * 0.75;
 				floor.addChild(player);
-				_players[id] = player;
+				_units[id] = player;
 			}
 		}
 		
@@ -163,16 +164,8 @@ package view.menu
 		
 		private function moveUnit(e:UserEvent):void 
 		{
-			var player:Player_asset = _players[e.data.id] as Player_asset;
-			moveUnitByPath(player, e.data.path as Array);
-		}
-		
-		private function moveUnitByPath(unit:DisplayObject, path:Array):void
-		{
-			if (!path.length) return;
-			var point:Point = path.shift() as Point;
-			TweenLite.to(unit, STEP_DURATION, { x:point.x * CELL_WIDTH + (point.y % 2 ? CELL_WIDTH / 2 : 0), y:point.y * CELL_HEIGHT * 0.75,
-				onComplete:moveUnitByPath, onCompleteParams:[unit, path] } );
+			var unit:Unit = _units[e.data.id] as Unit;
+			unit.move(e.data.path as Array);
 		}
 		
 		/**

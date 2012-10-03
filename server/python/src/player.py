@@ -217,7 +217,7 @@ class Player:
 		self.sendData(pack('<ihhb', 5, S_UPDATE_BID, id, count))
 
 	def sChatMessage(self, message):
-		mes = unicode(message, errors='replace')
+		mes = unicode(message, 'utf-8')
 		mesLen = len(mes.encode('utf-8'))
 		comSize = mesLen + SHORT_SIZE * 2;
 		self.sendData(pack('<ihh' + str(mesLen) + 's',
@@ -242,7 +242,7 @@ class Player:
 	def cItemInfo(self, data):
 		id = getShort(data, 0)
 		if self.cursor.execute("SELECT params FROM items WHERE id=%s", (id,)) == 1:
-			params = unicode(self.cursor.fetchone()[0], errors='replace')
+			params = unicode(self.cursor.fetchone()[0], 'utf-8')
 			paramsLen = len(params.encode('utf-8'))
 			comSize = SHORT_SIZE * 3 + paramsLen
 			self.sendData(pack('<ihhh' + str(paramsLen) + 's',

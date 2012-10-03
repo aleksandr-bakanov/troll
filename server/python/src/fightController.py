@@ -62,10 +62,7 @@ class FightController:
 		self.moveOrder = self.createMoveOrder()
 		self.sendStartInfo()
 		# Отправляем известную территорию
-		#area = self.knownArea[:]
-		#area[0].insert(0, 0)
 		self.sendAreaOpen(self.knownArea)
-		#del area[0][0]
 		
 	# Отправка клиентам начальной информации о бое.
 	def sendStartInfo(self):
@@ -95,8 +92,12 @@ class FightController:
 	# area = [ [cell, cell, ... ], ... ]
 	def sendAreaOpen(self, area):
 		comSize = 0
-		# Пишем CMD_ID и floors_count
-		data = pack('<hb', S_AREA_OPEN, len(area))
+		# Пишем CMD_ID и floors_count, но сначала посчитаем количество непустых этажей
+		floorsCount = 0
+		for floor in area:
+			if len(floor):
+				floorsCount += 1
+		data = pack('<hb', S_AREA_OPEN, floorsCount)
 		comSize += 3
 		floorId = 0
 		for floor in area:
@@ -161,7 +162,7 @@ class FightController:
 				floorWidth = len(self.map[floorId][0])
 				xc = p.fInfo["x"]
 				yc = p.fInfo["y"]
-				area = self.getCellsInRadius(floorId, floorWidth, floorHeight, xc, yc, 0, 3, True, True)
+				area = self.getCellsInRadius(floorId, floorWidth, floorHeight, xc, yc, 0, VIEW_RADIUS, True, True)
 				inResult = set(result[floorId])
 				inArea = set(area)
 				newArea = inArea - inResult
@@ -262,13 +263,39 @@ class FightController:
 		if x < 0 or y < 0 or self.map[floor][y][x].type != CT_FLOOR:
 			return
 		path = self.aStar(floor, px, py, x, y, [])
+		# TODO: Проверить хватает ли у игрока ОД, для прохода по такому пути
 		if len(path) > 0:
-			self.moveUnit(player, path, x, y)
+			# Теперь на каждом шаге игрока нужно проверять открытую им территорию.
+			# Видимо будем слать шаг-[ячейки]-шаг-[ячейки].
+			# Ячейки (территория) опциональны, т.к. игрок может ходить
+			# по уже изведанной территории.
+			while len(path):
+				# Берем очередной шаг
+				step = path[:2]
+				path = path[2:]
+				# Находим ячейки, которые видно с этой позиции
+				floorId = player.fInfo["floor"]
+				floorHeight = len(self.map[floorId])
+				floorWidth = len(self.map[floorId][0])
+				area = self.getCellsInRadius(floorId, floorWidth, floorHeight, step[0], step[1], 0, VIEW_RADIUS, True, True)
+				inKnownArea = set(self.knownArea[floorId])
+				inArea = set(area)
+				newArea = inArea - inKnownArea
+				self.knownArea[floorId] = self.knownArea[floorId] + list(newArea)
+				# Подготовим массив для функции sendAreaOpen
+				result = []
+				# Создаем этажи (пустые массивы этажей будут проигнорированы)
+				for floor in self.map:
+					result.append([])
+				result[floorId] = list(newArea)
+				# Игрокам нужно отправить newArea
+				self.sendAreaOpen(result)
+				self.moveUnit(player, step, step[0], step[1])
 
 	def moveUnit(self, player, path, x, y):
 		player.fInfo["x"] = x
 		player.fInfo["y"] = y
-		# Не забыть отнять ОД
+		# TODO: Не забыть отнять ОД
 		for p in self.players:
 			if p:
 				p.sMoveUnit(player.fInfo["id"], path)
