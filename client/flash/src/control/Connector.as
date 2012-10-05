@@ -95,6 +95,7 @@ package control
 			Dispatcher.instance.addEventListener(UserEvent.ENTER_BID, cEnterBid);
 			Dispatcher.instance.addEventListener(UserEvent.C_CHAT_MESSAGE, cChatMessage);
 			Dispatcher.instance.addEventListener(UserEvent.C_WANT_MOVE, cWantMove);
+			Dispatcher.instance.addEventListener(UserEvent.C_ACTION, cAction);
 		}
 		
 		private function configureSocket():void
@@ -182,6 +183,7 @@ package control
 				case S_UPDATE_BID: sUpdateBid(); break;
 				case S_START_FIGHT_INFO: sStartFightInfo(); break;
 				case S_AREA_OPEN: sAreaOpen(); break;
+				case S_KEYS_OPEN: sKeysOpen(); break;
 				case S_CHAT_MESSAGE: sChatMessage(); break;
 				case S_MOVE_UNIT: sMoveUnit(); break;
 				default: break;
@@ -352,6 +354,28 @@ package control
 			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.AREA_OPEN, cells));
 		}
 		
+		private function sKeysOpen():void 
+		{
+			var cells:Object = { };
+			var floorsCount:int = _socket.readByte();
+			for (var i:int = 0; i < floorsCount; i++)
+			{
+				var floorId:int = _socket.readByte();
+				if (!cells[floorId])
+					cells[floorId] = [];
+				var cellsCount:int = _socket.readShort();
+				for (var j:int = 0; j < cellsCount; j++)
+				{
+					var cell:Object = { };
+					cell.id = _socket.readShort();
+					cell.x = _socket.readShort();
+					cell.y = _socket.readShort();
+					cells[floorId].push(cell);
+				}
+			}
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.KEYS_OPEN, cells));
+		}
+		
 		private function sChatMessage():void 
 		{
 			var mes:String = _socket.readUTF();
@@ -499,6 +523,16 @@ package control
 			var point:Point = e.data as Point;
 			_socket.writeInt(6);
 			_socket.writeShort(C_WANT_MOVE);
+			_socket.writeShort(point.x);
+			_socket.writeShort(point.y);
+			_socket.flush();
+		}
+		
+		private function cAction(e:UserEvent):void 
+		{
+			var point:Point = e.data as Point;
+			_socket.writeInt(6);
+			_socket.writeShort(C_ACTION);
 			_socket.writeShort(point.x);
 			_socket.writeShort(point.y);
 			_socket.flush();

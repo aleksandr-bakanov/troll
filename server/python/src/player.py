@@ -146,6 +146,8 @@ class Player:
 					operatedBytes += self.cChatMessage(data[operatedBytes:])
 				elif comId == C_WANT_MOVE:
 					operatedBytes += self.cWantMove(data[operatedBytes:])
+				elif comId == C_ACTION:
+					operatedBytes += self.cAction(data[operatedBytes:])
 				# После обработки одной команды смотрим, есть ли еще
 				# что обработать.
 				# Если мы обработали все байты, переданные нам, возвращаем
@@ -407,6 +409,15 @@ class Player:
 		y = getShort(data, 2)
 		if self.fightController:
 			self.fightController.unitWantMove(self, x, y)
+		return SHORT_SIZE * 2
+
+	def cAction(self, data):
+		# TODO: Кажется сервер виснет если ему прислать неизвестную команду. А их нужно игнорировать.
+		x = getShort(data, 0)
+		y = getShort(data, 2)
+		print "cAction", x, y
+#		if self.fightController:
+#			self.fightController.unitWantMove(self, x, y)
 		return SHORT_SIZE * 2
 
 	# ==================================================================

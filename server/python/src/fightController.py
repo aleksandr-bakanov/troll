@@ -30,11 +30,19 @@ class aStarCell:
 #
 # ======================================================================
 class Cell:
-	def __init__(self, x=0, y=0, type=CT_FLOOR, hp=-1):
+	# x, y - координаты
+	# type - тип
+	# hp - жизни
+	# keys - список ключей, которые нужно активизировать, чтобы открыть данную ячейку,
+	# если она является дверью
+	# key - id ключа, хранящегося в ячейке. Активизируется при взаимодействии с ячейкой.
+	def __init__(self, x=0, y=0, type=CT_FLOOR, hp=-1, keys=None, key=-1):
 		self.type = type
 		self.x = x
 		self.y = y
 		self.hp = hp
+		self.keys = keys
+		self.key = key
 
 # ======================================================================
 #
@@ -62,7 +70,8 @@ class FightController:
 		self.moveOrder = self.createMoveOrder()
 		self.sendStartInfo()
 		# Отправляем известную территорию
-		self.sendAreaOpen(self.knownArea)
+		self.sendOpenedArea(self.knownArea)
+		self.sendOpenedKeys(self.knownArea)
 		
 	# Отправка клиентам начальной информации о бое.
 	def sendStartInfo(self):
@@ -90,7 +99,7 @@ class FightController:
 
 	# В эту функцию следует подавать уже подготовленный двумерный массив.
 	# area = [ [cell, cell, ... ], ... ]
-	def sendAreaOpen(self, area):
+	def sendOpenedArea(self, area):
 		comSize = 0
 		# Пишем CMD_ID и floors_count, но сначала посчитаем количество непустых этажей
 		floorsCount = 0
@@ -117,6 +126,49 @@ class FightController:
 			if p:
 				p.sendData(data)
 
+	# В эту функцию следует подавать уже подготовленный двумерный массив.
+	# area = [ [cell, cell, ... ], ... ]
+	def sendOpenedKeys(self, area):
+		# Так как пока в эту фукцию будет поступать тот же массив ячеек, что и в функцию sendOpenedArea,
+		# будем обрабатывать (урезать) его прямо здесь. Точнее будем брать только те ячейки, в которых
+		# действительно есть ключи.
+		comSize = 0
+		# Пишем CMD_ID и floors_count, но сначала посчитаем количество непустых этажей
+		floorsCount = 0
+		for floor in area:
+			if len(floor):
+				keysCount = 0
+				for cell in floor:
+					if cell.key >= 0:
+						keysCount += 1
+				if keysCount:
+					floorsCount += 1
+
+		data = pack('<hb', S_KEYS_OPEN, floorsCount)
+		comSize += 3
+		floorId = 0
+		for floor in area:
+			# Вот здесь нужно посчитать сколько ячеек на самом деле наделено ключами
+			keysCount = 0
+			for cell in floor:
+				if cell.key >= 0:
+					keysCount += 1
+			#print "keysCount =",keysCount
+			if keysCount:
+				data += pack('<bh', floorId, keysCount)
+				comSize += 3
+				for cell in floor:
+					# И здесь не забыть проверить
+					#print "  cell.key =",cell.key
+					if cell.key >= 0:
+						data += pack('<hhh', cell.key, cell.x, cell.y)
+						comSize += 6
+			floorId += 1
+		data = pack('<i', comSize) + data
+		for p in self.players:
+			if p:
+				p.sendData(data)
+
 	# В moveOrder должны храниться id юнитов. Первые id (с нулевого
 	# по len(self.players) - 1) отведены для игроков, остальные под
 	# мобов.
@@ -125,21 +177,13 @@ class FightController:
 		shuffle(order)
 		return order
 
-	# Функция отправки игрокам только что открытой ими зоны
-	def sendOpenedArea(self, area):
-		pass
-
-	# Функция отправки игрокам только что открытых ими ключей
-	def sendOpenedKeys(self, keys):
-		pass
-
 	def __del__(self):
 		del self.players
 		del self.map
 		del self.knownArea
 		print "FightController deleted."
 
-	# Временная функция. Ее следует заменить на sendOpenedArea.
+	# Функция определят какое поле известно игрокам в начале боя.
 	def getKnownArea(self):
 		result = []
 		# Создаем этажи
@@ -184,6 +228,8 @@ class FightController:
 					cell.type = CT_WALL
 				else:
 					cell.type = CT_FLOOR
+				if x == 1 and y == 0:
+					cell.key = 0
 				map[0][y].append(cell)
 				x += 1
 			x = 0
@@ -282,14 +328,15 @@ class FightController:
 				inArea = set(area)
 				newArea = inArea - inKnownArea
 				self.knownArea[floorId] = self.knownArea[floorId] + list(newArea)
-				# Подготовим массив для функции sendAreaOpen
+				# Подготовим массив для функции sendOpenedArea
 				result = []
 				# Создаем этажи (пустые массивы этажей будут проигнорированы)
 				for floor in self.map:
 					result.append([])
 				result[floorId] = list(newArea)
 				# Игрокам нужно отправить newArea
-				self.sendAreaOpen(result)
+				self.sendOpenedArea(result)
+				self.sendOpenedKeys(result)
 				self.moveUnit(player, step, step[0], step[1])
 
 	def moveUnit(self, player, path, x, y):

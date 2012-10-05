@@ -5,7 +5,9 @@ package view.menu
 	import control.UserEvent;
 	import flash.display.DisplayObject;
 	import flash.display.DisplayObjectContainer;
+	import flash.display.Graphics;
 	import flash.display.MovieClip;
+	import flash.display.Shape;
 	import flash.display.Sprite;
 	import flash.events.MouseEvent;
 	import flash.geom.Point;
@@ -66,6 +68,7 @@ package view.menu
 		{
 			Dispatcher.instance.addEventListener(UserEvent.START_FIGHT, startFight);
 			Dispatcher.instance.addEventListener(UserEvent.AREA_OPEN, areaOpen);
+			Dispatcher.instance.addEventListener(UserEvent.KEYS_OPEN, keysOpen);
 			Dispatcher.instance.addEventListener(UserEvent.S_CHAT_MESSAGE, sChatMessage);
 			Dispatcher.instance.addEventListener(UserEvent.MOVE_UNIT, moveUnit);
 			
@@ -120,6 +123,7 @@ package view.menu
 		{
 			for (var id:String in e.data)
 			{
+				// Создаем этаж если его еще не было.
 				if (!_cells[id])
 				{
 					_cells[id] = [];
@@ -156,10 +160,39 @@ package view.menu
 			glowRadius(0, floor[0].length, floor.length, o.x, o.y, 0, 2);*/
 		}
 		
+		private function keysOpen(e:UserEvent):void 
+		{
+			for (var id:String in e.data)
+			{
+				// Вьюшки
+				var floor:Array = _cells[id] as Array;
+				var floorInfo:Array = e.data[id] as Array;
+				for (var i:int = 0; i < floorInfo.length; i++)
+				{
+					var info:Object = floorInfo[i];
+					var cell:Cell_asset = floor[info.y][info.x] as Cell_asset;
+					// Нужен какой-нибудь вразумительный сигнал о том, что на данной ячейке появился ключ.
+					var s:Shape = new Shape();
+					var g:Graphics = s.graphics;
+					g.lineStyle(1);
+					g.beginFill(0xFF0000);
+					g.drawCircle(0, 0, 5);
+					g.endFill();
+					cell.addChild(s);
+					
+					cell.info.key = info.id;
+				}
+			}
+		}
+		
 		private function cellClickHandler(e:MouseEvent):void 
 		{
 			var cell:Cell_asset = e.currentTarget as Cell_asset;
-			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.C_WANT_MOVE, new Point(cell.info.x, cell.info.y)));
+			if (cell.info.type == CT_FLOOR)
+				Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.C_WANT_MOVE, new Point(cell.info.x, cell.info.y)));
+			// Пока условимся, что кнопки могут быть расположены только на стенах
+			else if (cell.info.type == CT_WALL && !isNaN(cell.info.key))
+				Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.C_ACTION, new Point(cell.info.x, cell.info.y)));
 		}
 		
 		private function moveUnit(e:UserEvent):void 
