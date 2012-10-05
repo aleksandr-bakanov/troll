@@ -186,6 +186,7 @@ package control
 				case S_KEYS_OPEN: sKeysOpen(); break;
 				case S_CHAT_MESSAGE: sChatMessage(); break;
 				case S_MOVE_UNIT: sMoveUnit(); break;
+				case S_CHANGE_CELL: sChangeCell(); break;
 				default: break;
 			}
 			_lastComSize = 0;
@@ -395,6 +396,15 @@ package control
 			}
 			if (path.length)
 				Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.MOVE_UNIT, { id:id, path:path } ));
+		}
+		
+		private function sChangeCell():void 
+		{
+			var floor:int = _socket.readByte();
+			var x:int = _socket.readShort();
+			var y:int = _socket.readShort();
+			var type:int = _socket.readByte();
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.CHANGE_CELL, { floor:floor, x:x, y:y, type:type } ));
 		}
 
 

@@ -36,8 +36,9 @@ class Cell:
 	# keys - список ключей, которые нужно активизировать, чтобы открыть данную ячейку,
 	# если она является дверью
 	# key - id ключа, хранящегося в ячейке. Активизируется при взаимодействии с ячейкой.
-	def __init__(self, x=0, y=0, type=CT_FLOOR, hp=-1, keys=None, key=-1):
+	def __init__(self, floor=0, x=0, y=0, type=CT_FLOOR, hp=-1, keys=None, key=-1):
 		self.type = type
+		self.floor = floor
 		self.x = x
 		self.y = y
 		self.hp = hp
@@ -55,6 +56,8 @@ class FightController:
 		for p in players:
 			if p:
 				p.fightController = self
+		# Список для отдельного хранения дверей
+		self.doors = []
 		# Создаем карту
 		self.map = self.createMap()
 		# Расставляем игроков
@@ -106,6 +109,8 @@ class FightController:
 		for floor in area:
 			if len(floor):
 				floorsCount += 1
+		if not floorsCount:
+			return
 		data = pack('<hb', S_AREA_OPEN, floorsCount)
 		comSize += 3
 		floorId = 0
@@ -143,6 +148,8 @@ class FightController:
 						keysCount += 1
 				if keysCount:
 					floorsCount += 1
+		if not floorsCount:
+			return
 
 		data = pack('<hb', S_KEYS_OPEN, floorsCount)
 		comSize += 3
@@ -181,6 +188,7 @@ class FightController:
 		del self.players
 		del self.map
 		del self.knownArea
+		del self.doors
 		print "FightController deleted."
 
 	# Функция определят какое поле известно игрокам в начале боя.
@@ -213,7 +221,6 @@ class FightController:
 				result[floorId] = result[floorId] + list(newArea)
 		return result
 
-
 	def createMap(self):
 		map = [[]]
 		sizeX = 6
@@ -223,14 +230,19 @@ class FightController:
 		while y < sizeY:
 			map[0].append([])
 			while x < sizeX:
-				cell = Cell(x, y)
+				cell = Cell(0, x, y)
 				if x == 0 or x == sizeX - 1 or y == 0 or y == sizeY - 1 or (x == 3 and y == 2):
 					cell.type = CT_WALL
 				else:
 					cell.type = CT_FLOOR
 				if x == 1 and y == 0:
 					cell.key = 0
+				if (x == 3 and y == 2) or (x == 2 and y == 0):
+					cell.type = CT_DOOR
+					cell.keys = [0]
 				map[0][y].append(cell)
+				if cell.type == CT_DOOR:
+					self.doors.append(cell)
 				x += 1
 			x = 0
 			y += 1
@@ -302,7 +314,61 @@ class FightController:
 				result = dy + dx - (int(dy / 2) + 1)
 		return result
 
+	def unitWantAction(self, player, x, y):
+		# Взаимодействовать с ячейкой можно только находясь в непосредственной близости от нее
+		floorId = player.fInfo["floor"]
+		xs = player.fInfo["x"]
+		ys = player.fInfo["y"]
+		# Проверка входных данных
+		if x < 0 or y < 0 or x >= len(self.map[floorId][0]) or y >= len(self.map[floorId]):
+			return
+		distance = self.calculateWayLength(len(self.map[floorId][0]), len(self.map[floorId]), xs, ys, x, y)
+		if distance != 1:
+			return
+		# Если не с чем взамодействовать, уходим
+		cell = self.map[floorId][y][x]
+		if cell.type != CT_WALL or cell.key < 0:
+			return
+		# Наконец-то есть с чем повзаимодействовать
+		wasOpened = self.useKey(cell.key)
+		# TODO: Если wasOpened == True, нужно опросить всех игроков, что им стало видно после открытия двери.
+
+
+	# Функция проходится по списку дверей и открывает замки соответствующие переданному ключу.
+	# Если замков на двери больше нет, то ячейка превращается в пол.
+	# Функция возращает True, если была открыта хотя бы одна дверь, т.к. после этого может потребоваться
+	# исследовать вновь открытую территорию.
+	def useKey(self, key):
+		isOpened = False
+		clen = len(self.doors)
+		i = 0
+		while i < clen:
+			cell = self.doors[i]
+			if key in cell.keys:
+				cell.keys.remove(key)
+			# Если ключей на двери не осталось, нужно превратить ее в пол и удалить из списка дверей
+			if len(cell.keys) == 0:
+				# Превращаем
+				self.changeCellType(cell, CT_FLOOR)
+				isOpened = True
+				# Удаляем
+				a = self.doors[0:i]
+				b = self.doors[i+1:]
+				self.doors = a + b
+				i -= 1
+				clen -= 1
+			i += 1
+		return isOpened
+
+	# Функция изменяет тип ячейки и сообщает об этом игрокам
+	def changeCellType(self, cell, type):
+		cell.type = type
+		for p in self.players:
+			if p:
+				p.sChangeCell(cell.floor, cell.x, cell.y, cell.type)
+
 	def unitWantMove(self, player, x, y):
+		# Впоследствии сюда нужно вставить проверку на то, что ходит действительно этот игрок
 		floor = player.fInfo["floor"]
 		px = player.fInfo["x"]
 		py = player.fInfo["y"]

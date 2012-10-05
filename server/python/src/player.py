@@ -233,6 +233,10 @@ class Player:
 			comSize += CHAR_SIZE
 		data = pack('<i', comSize) + data
 		self.sendData(data)
+
+	def sChangeCell(self, floor, x, y, type):
+		data = pack('<ihbhhb', 8, S_CHANGE_CELL, floor, x, y, type)
+		self.sendData(data)
 		
 	
 	# ==================================================================
@@ -415,9 +419,8 @@ class Player:
 		# TODO: Кажется сервер виснет если ему прислать неизвестную команду. А их нужно игнорировать.
 		x = getShort(data, 0)
 		y = getShort(data, 2)
-		print "cAction", x, y
-#		if self.fightController:
-#			self.fightController.unitWantMove(self, x, y)
+		if self.fightController:
+			self.fightController.unitWantAction(self, x, y)
 		return SHORT_SIZE * 2
 
 	# ==================================================================

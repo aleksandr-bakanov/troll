@@ -71,6 +71,7 @@ package view.menu
 			Dispatcher.instance.addEventListener(UserEvent.KEYS_OPEN, keysOpen);
 			Dispatcher.instance.addEventListener(UserEvent.S_CHAT_MESSAGE, sChatMessage);
 			Dispatcher.instance.addEventListener(UserEvent.MOVE_UNIT, moveUnit);
+			Dispatcher.instance.addEventListener(UserEvent.CHANGE_CELL, changeCell);
 			
 			module.enter.addEventListener(MouseEvent.CLICK, enterHandler);
 		}
@@ -183,6 +184,15 @@ package view.menu
 					cell.info.key = info.id;
 				}
 			}
+		}
+		
+		private function changeCell(e:UserEvent):void 
+		{
+			var floor:Array = _cells[e.data.floor] as Array;
+			var cell:Cell_asset = floor[e.data.y][e.data.x] as Cell_asset;
+			cell.info.type = e.data.type;
+			if (cell.info.type == CT_FLOOR) cell.gotoAndStop("floor");
+			else cell.gotoAndStop("wall");
 		}
 		
 		private function cellClickHandler(e:MouseEvent):void 
