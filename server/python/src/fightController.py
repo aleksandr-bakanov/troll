@@ -64,8 +64,8 @@ class FightController:
 		# Пока (и впредь?) будем расставлять игроков
 		# так, чтобы в первый ход не пришлось встраивать в порядок
 		# ходов мобов.
-		self.players[0].fInfo["x"] = 2
-		self.players[0].fInfo["y"] = 3
+		self.players[0].fInfo["x"] = 1
+		self.players[0].fInfo["y"] = 1
 		self.players[0].fInfo["floor"] = 0
 		self.players[0].fInfo["id"] = 0
 		
@@ -150,7 +150,6 @@ class FightController:
 					floorsCount += 1
 		if not floorsCount:
 			return
-
 		data = pack('<hb', S_KEYS_OPEN, floorsCount)
 		comSize += 3
 		floorId = 0
@@ -191,18 +190,12 @@ class FightController:
 		del self.doors
 		print "FightController deleted."
 
-	# Функция определят какое поле известно игрокам в начале боя.
+	# Функция определят какое поле известно игрокам в данный момент.
 	def getKnownArea(self):
 		result = []
 		# Создаем этажи
-		#fl = 0
 		for floor in self.map:
 			result.append([])
-		#	for line in floor:
-		#		for c in line:
-		#			result[fl].append(c)
-		#	fl += 1
-		#return result
 
 		# Следует заметить, что в self.knownArea хранится не трехмерный список,
 		# а двумерный. Т.е. этаж является одномерным списком перечисляющим
@@ -231,13 +224,13 @@ class FightController:
 			map[0].append([])
 			while x < sizeX:
 				cell = Cell(0, x, y)
-				if x == 0 or x == sizeX - 1 or y == 0 or y == sizeY - 1 or (x == 3 and y == 2):
+				if x == 0 or x == sizeX - 1 or y == 0 or y == sizeY - 1 or y == 2:
 					cell.type = CT_WALL
 				else:
 					cell.type = CT_FLOOR
-				if x == 1 and y == 0:
+				if x == 2 and y == 2:
 					cell.key = 0
-				if (x == 3 and y == 2) or (x == 2 and y == 0):
+				if x == 3 and y == 2:
 					cell.type = CT_DOOR
 					cell.keys = [0]
 				map[0][y].append(cell)
@@ -332,6 +325,24 @@ class FightController:
 		# Наконец-то есть с чем повзаимодействовать
 		wasOpened = self.useKey(cell.key)
 		# TODO: Если wasOpened == True, нужно опросить всех игроков, что им стало видно после открытия двери.
+		if wasOpened:
+			area = self.getKnownArea()
+			# Подготовим массив для функции sendOpenedArea
+			result = []
+			# Создаем этажи (пустые массивы этажей будут проигнорированы)
+			for floor in self.map:
+				result.append([])
+			floorId = 0
+			while floorId < len(area):
+				if len(area[floorId]):
+					inKnownArea = set(self.knownArea[floorId])
+					inArea = set(area[floorId])
+					newArea = inArea - inKnownArea
+					self.knownArea[floorId] = self.knownArea[floorId] + list(newArea)
+					result[floorId] = list(newArea)
+				floorId += 1
+			self.sendOpenedArea(result)
+			self.sendOpenedKeys(result)
 
 
 	# Функция проходится по списку дверей и открывает замки соответствующие переданному ключу.
@@ -742,6 +753,6 @@ class FightController:
 	def getObstacles(self, cells, exceptX, exceptY):
 		r = []
 		for cell in cells:
-			if not (exceptX == cell.x and exceptY == cell.y) and cell.type == CT_WALL:
+			if not (exceptX == cell.x and exceptY == cell.y) and (cell.type == CT_WALL or cell.type == CT_DOOR):
 				r.append(cell)
 		return r
