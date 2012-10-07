@@ -51,6 +51,7 @@ S_UNIT_ATTACK = 43
 S_UNIT_DAMAGE = 45
 S_UNIT_ACTION = 47
 S_CHANGE_CELL = 49
+S_TELEPORT_UNIT = 51
 
 # Client side commands ids
 C_LOGIN = 2

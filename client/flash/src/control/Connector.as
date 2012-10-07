@@ -45,6 +45,7 @@ package control
 		public static const S_UNIT_DAMAGE:int = 45;
 		public static const S_UNIT_ACTION:int = 47;
 		public static const S_CHANGE_CELL:int = 49;
+		public static const S_TELEPORT_UNIT:int = 51;
 
 		// Client side
 		public static const C_LOGIN:int = 2;

@@ -201,22 +201,22 @@ class Player:
 
 	# Функция извещает игрока о добавлении в рюкзак предмета с указанным
 	# id, в указанном количестве.
-	def sAddItem(self, id, count):
-		self.sendData(pack('<ihhb', 5, S_ADD_ITEM, id, count))
+	def sAddItem(self, itemId, count):
+		self.sendData(pack('<ihhb', 5, S_ADD_ITEM, itemId, count))
 
 	# Функция извещает игрока о появлении новой заявки.
-	def sNewBid(self, id, op, count, curcount, name):
+	def sNewBid(self, bidId, op, count, curcount, name):
 		nameLen = len(name)
 		self.sendData(pack('<ihhhbbh' + str(nameLen) + 's', 10 + nameLen,
-			S_NEW_BID, id, op, count, curcount, nameLen, name))
+			S_NEW_BID, bidId, op, count, curcount, nameLen, name))
 
 	# Функция извещает игрока об удалении заявки.
-	def sRemoveBid(self, id):
-		self.sendData(pack('<ihh', 4, S_REMOVE_BID, id))
+	def sRemoveBid(self, bidId):
+		self.sendData(pack('<ihh', 4, S_REMOVE_BID, bidId))
 
 	# Функция извещает игрока об обновлении состояния заявки.
-	def sUpdateBid(self, id, count):
-		self.sendData(pack('<ihhb', 5, S_UPDATE_BID, id, count))
+	def sUpdateBid(self, bidId, count):
+		self.sendData(pack('<ihhb', 5, S_UPDATE_BID, bidId, count))
 
 	def sChatMessage(self, message):
 		mes = unicode(message, 'utf-8')
@@ -225,8 +225,8 @@ class Player:
 		self.sendData(pack('<ihh' + str(mesLen) + 's',
 			comSize, S_CHAT_MESSAGE, mesLen, mes.encode('utf-8')))
 
-	def sMoveUnit(self, id, path):
-		data = pack('<hbb', S_MOVE_UNIT, id, len(path) / 2)
+	def sMoveUnit(self, unitId, path):
+		data = pack('<hbb', S_MOVE_UNIT, unitId, len(path) / 2)
 		comSize = 4
 		for c in path:
 			data += pack('<h', c)
@@ -236,6 +236,10 @@ class Player:
 
 	def sChangeCell(self, floor, x, y, type):
 		data = pack('<ihbhhb', 8, S_CHANGE_CELL, floor, x, y, type)
+		self.sendData(data)
+
+	def sTeleportUnit(self, unitId, floor, x, y):
+		data = pack('<ihbbhh', 8, S_TELEPORT_UNIT, unitId, floor, x, y)
 		self.sendData(data)
 		
 	

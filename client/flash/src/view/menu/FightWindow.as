@@ -189,7 +189,9 @@ package view.menu
 		private function changeCell(e:UserEvent):void 
 		{
 			var floor:Array = _cells[e.data.floor] as Array;
+			if (!floor) return;
 			var cell:Cell_asset = floor[e.data.y][e.data.x] as Cell_asset;
+			if (!cell) return;
 			cell.info.type = e.data.type;
 			if (cell.info.type == CT_FLOOR) cell.gotoAndStop("floor");
 			else cell.gotoAndStop("wall");

@@ -36,7 +36,9 @@ class Cell:
 	# keys - список ключей, которые нужно активизировать, чтобы открыть данную ячейку,
 	# если она является дверью
 	# key - id ключа, хранящегося в ячейке. Активизируется при взаимодействии с ячейкой.
-	def __init__(self, floor=0, x=0, y=0, type=CT_FLOOR, hp=-1, keys=None, key=-1):
+	# toFloor, toX, toY - id этажа и координаты ячейки в которую переместится игрок, если
+	# активизирует данную ячейку.
+	def __init__(self, floor=0, x=0, y=0, type=CT_FLOOR, hp=-1, keys=None, key=-1, toFloor=-1, toX=-1, toY=-1):
 		self.type = type
 		self.floor = floor
 		self.x = x
@@ -44,6 +46,9 @@ class Cell:
 		self.hp = hp
 		self.keys = keys
 		self.key = key
+		self.toFloor = toFloor
+		self.toX = toX
+		self.toY = toY
 
 # ======================================================================
 #
@@ -320,29 +325,74 @@ class FightController:
 			return
 		# Если не с чем взамодействовать, уходим
 		cell = self.map[floorId][y][x]
-		if cell.type != CT_WALL or cell.key < 0:
+		# На стенах могут быть ключи
+		if cell.type == CT_WALL:
+			if cell.key < 0:
+				return
+		# А на полу может быть переход между этажами
+		elif cell.type == CT_FLOOR:
+			if cell.toFloor < 0:
+				return
+		# Иначе, если игрок делает попытку взаимодействия не со стеной и не с полом, уходим
+		else:
 			return
 		# Наконец-то есть с чем повзаимодействовать
-		wasOpened = self.useKey(cell.key)
-		# TODO: Если wasOpened == True, нужно опросить всех игроков, что им стало видно после открытия двери.
-		if wasOpened:
-			area = self.getKnownArea()
+		# Если это стена, то на ней точно есть ключ
+		if cell.type == CT_WALL:
+			wasOpened = self.useKey(cell.key)
+			# TODO: Если wasOpened == True, нужно опросить всех игроков, что им стало видно после открытия двери.
+			if wasOpened:
+				area = self.getKnownArea()
+				# Подготовим массив для функции sendOpenedArea
+				result = []
+				# Создаем этажи (пустые массивы этажей будут проигнорированы)
+				for floor in self.map:
+					result.append([])
+				floorId = 0
+				while floorId < len(area):
+					if len(area[floorId]):
+						inKnownArea = set(self.knownArea[floorId])
+						inArea = set(area[floorId])
+						newArea = inArea - inKnownArea
+						self.knownArea[floorId] = self.knownArea[floorId] + list(newArea)
+						result[floorId] = list(newArea)
+					floorId += 1
+				self.sendOpenedArea(result)
+				self.sendOpenedKeys(result)
+		# Если же это пол, то это точно переход между этажами
+		elif cell.type == CT_FLOOR:
+			# Перемещаем юнита
+			player.fInfo["floor"] = cell.toFloor
+			player.fInfo["x"] = cell.toX
+			player.fInfo["y"] = cell.toY
+			# Находим ячейки, которые видно с этой позиции
+			floorId = player.fInfo["floor"]
+			floorHeight = len(self.map[floorId])
+			floorWidth = len(self.map[floorId][0])
+			area = self.getCellsInRadius(floorId, floorWidth, floorHeight, cell.toX, cell.toY, 0, VIEW_RADIUS, True, True)
+			inKnownArea = set(self.knownArea[floorId])
+			inArea = set(area)
+			newArea = inArea - inKnownArea
+			self.knownArea[floorId] = self.knownArea[floorId] + list(newArea)
 			# Подготовим массив для функции sendOpenedArea
 			result = []
 			# Создаем этажи (пустые массивы этажей будут проигнорированы)
 			for floor in self.map:
 				result.append([])
-			floorId = 0
-			while floorId < len(area):
-				if len(area[floorId]):
-					inKnownArea = set(self.knownArea[floorId])
-					inArea = set(area[floorId])
-					newArea = inArea - inKnownArea
-					self.knownArea[floorId] = self.knownArea[floorId] + list(newArea)
-					result[floorId] = list(newArea)
-				floorId += 1
+			result[floorId] = list(newArea)
+			# Игрокам нужно отправить newArea
 			self.sendOpenedArea(result)
 			self.sendOpenedKeys(result)
+			self.teleportUnit(player, cell.toFloor, cell.toX, cell.toY)
+
+	def teleportUnit(self, unit, floor, x, y):
+		unit.fInfo["floor"] = floor
+		unit.fInfo["x"] = x
+		unit.fInfo["y"] = y
+		# TODO: Не забыть отнять ОД
+		for p in self.players:
+			if p:
+				p.sTeleportUnit(unit.fInfo["id"], floor, x, y)
 
 
 	# Функция проходится по списку дверей и открывает замки соответствующие переданному ключу.
@@ -416,13 +466,13 @@ class FightController:
 				self.sendOpenedKeys(result)
 				self.moveUnit(player, step, step[0], step[1])
 
-	def moveUnit(self, player, path, x, y):
-		player.fInfo["x"] = x
-		player.fInfo["y"] = y
+	def moveUnit(self, unit, path, x, y):
+		unit.fInfo["x"] = x
+		unit.fInfo["y"] = y
 		# TODO: Не забыть отнять ОД
 		for p in self.players:
 			if p:
-				p.sMoveUnit(player.fInfo["id"], path)
+				p.sMoveUnit(unit.fInfo["id"], path)
 			
 
 #=======================================================================
