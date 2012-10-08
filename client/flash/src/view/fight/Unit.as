@@ -15,6 +15,7 @@ package view.fight
 		public var module:Player_asset;
 		public var path:Array = [];
 		public var isMoving:Boolean = false;
+		private var _tweenLite:TweenLite;
 		
 		public function Unit() 
 		{
@@ -32,6 +33,13 @@ package view.fight
 			}
 		}
 		
+		public function stopMove():void
+		{
+			_tweenLite.kill();
+			path = [];
+			isMoving = false;
+		}
+		
 		private function goNextStep():void
 		{
 			if (!path.length)
@@ -40,7 +48,7 @@ package view.fight
 				return;
 			}
 			var point:Point = path.shift() as Point;
-			TweenLite.to(this, FightWindow.STEP_DURATION, { x:point.x * FightWindow.CELL_WIDTH + (point.y % 2 ? FightWindow.CELL_WIDTH / 2 : 0), y:point.y * FightWindow.CELL_HEIGHT * 0.75,
+			_tweenLite = TweenLite.to(this, FightWindow.STEP_DURATION, { x:point.x * FightWindow.CELL_WIDTH + (point.y % 2 ? FightWindow.CELL_WIDTH / 2 : 0), y:point.y * FightWindow.CELL_HEIGHT * 0.75,
 				onComplete:goNextStep } );
 		}
 		

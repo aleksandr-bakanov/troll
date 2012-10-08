@@ -40,6 +40,7 @@ package control
 		public static const C_ACTION:String = "c_action";
 		public static const MOVE_UNIT:String = "move_unit";
 		public static const CHANGE_CELL:String = "change_cell";
+		public static const TELEPORT_UNIT:String = "teleport_unit";
 		
 		public var data:Object;
 		

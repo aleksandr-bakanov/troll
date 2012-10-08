@@ -188,6 +188,7 @@ package control
 				case S_CHAT_MESSAGE: sChatMessage(); break;
 				case S_MOVE_UNIT: sMoveUnit(); break;
 				case S_CHANGE_CELL: sChangeCell(); break;
+				case S_TELEPORT_UNIT: sTeleportUnit(); break;
 				default: break;
 			}
 			_lastComSize = 0;
@@ -348,14 +349,38 @@ package control
 					cell.x = _socket.readShort();
 					cell.y = _socket.readShort();
 					cell.type = _socket.readByte();
-					if (cell.type == FightWindow.CT_WALL)
+					if (cell.type == FightWindow.CT_FLOOR)
+					{
+						cell.toFloor = _socket.readByte();
+						if (cell.toFloor >= 0)
+						{
+							cell.toX = _socket.readShort();
+							cell.toY = _socket.readShort();
+						}
+					}
+					else if (cell.type == FightWindow.CT_WALL)
+					{
 						cell.hp = _socket.readByte();
+						cell.key = _socket.readShort();
+					}
+					else if (cell.type == FightWindow.CT_DOOR)
+					{
+						var lockCount:int = _socket.readShort();
+						if (lockCount)
+						{
+							cell.keys = [];
+							for (var k:int = 0; k < lockCount; k++)
+								cell.keys.push(_socket.readShort());
+						}
+					}
 					cells[floorId].push(cell);
 				}
 			}
 			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.AREA_OPEN, cells));
 		}
 		
+		// Сейчас функционал данной команды перенесен в S_AREA_OPEN
+		// Возможно вдальнейшем функционал будет снова разведен для уменьшения трафика.
 		private function sKeysOpen():void 
 		{
 			var cells:Object = { };
@@ -406,6 +431,15 @@ package control
 			var y:int = _socket.readShort();
 			var type:int = _socket.readByte();
 			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.CHANGE_CELL, { floor:floor, x:x, y:y, type:type } ));
+		}
+		
+		private function sTeleportUnit():void 
+		{
+			var unitId:int = _socket.readByte();
+			var floor:int = _socket.readByte();
+			var x:int = _socket.readShort();
+			var y:int = _socket.readShort();
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.TELEPORT_UNIT, { unitId:unitId, floor:floor, x:x, y:y } ));
 		}
 
 

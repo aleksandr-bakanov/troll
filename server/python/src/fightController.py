@@ -79,7 +79,7 @@ class FightController:
 		self.sendStartInfo()
 		# Отправляем известную территорию
 		self.sendOpenedArea(self.knownArea)
-		self.sendOpenedKeys(self.knownArea)
+		#self.sendOpenedKeys(self.knownArea)
 		
 	# Отправка клиентам начальной информации о бое.
 	def sendStartInfo(self):
@@ -127,9 +127,26 @@ class FightController:
 				for cell in floor:
 					data += pack('<hhb', cell.x, cell.y, cell.type)
 					comSize += 5
-					if cell.type == CT_WALL:
-						data += pack('<b', cell.hp)
+					# Дополнительные параметры пола
+					if cell.type == CT_FLOOR:
+						data += pack('<b', cell.toFloor)
 						comSize += 1
+						if cell.toFloor >= 0:
+							data += pack('<hh', cell.toX, cell.toY)
+							comSize += 4
+					# Дополнительные параметры стены
+					elif cell.type == CT_WALL:
+						data += pack('<bh', cell.hp, cell.key)
+						comSize += 3
+					# Дополнительные параметры двери
+					elif cell.type == CT_DOOR:
+						lockCount = len(cell.keys)
+						data += pack('<h', lockCount)
+						comSize += 2
+						if lockCount:
+							for key in cell.keys:
+								data += pack('<h', key)
+								comSize += 2
 			floorId += 1
 		data = pack('<i', comSize) + data
 		for p in self.players:
@@ -220,7 +237,7 @@ class FightController:
 		return result
 
 	def createMap(self):
-		map = [[]]
+		map = [[],[]]
 		sizeX = 6
 		sizeY = 6
 		x = 0
@@ -238,7 +255,34 @@ class FightController:
 				if x == 3 and y == 2:
 					cell.type = CT_DOOR
 					cell.keys = [0]
+				if x == 4 and y == 1:
+					cell.toFloor = 1
+					cell.toX = 1
+					cell.toY = 1
 				map[0][y].append(cell)
+				if cell.type == CT_DOOR:
+					self.doors.append(cell)
+				x += 1
+			x = 0
+			y += 1
+		# Проба второго этажа
+		x = 0
+		y = 0
+		sizeX = 4
+		sizeY = 3
+		while y < sizeY:
+			map[1].append([])
+			while x < sizeX:
+				cell = Cell(0, x, y)
+				if x == 0 or x == sizeX - 1 or y == 0 or y == sizeY - 1 or y == 2:
+					cell.type = CT_WALL
+				else:
+					cell.type = CT_FLOOR
+				if x == 2 and y == 1:
+					cell.toFloor = 0
+					cell.toX = 1
+					cell.toY = 3
+				map[1][y].append(cell)
 				if cell.type == CT_DOOR:
 					self.doors.append(cell)
 				x += 1
@@ -358,7 +402,7 @@ class FightController:
 						result[floorId] = list(newArea)
 					floorId += 1
 				self.sendOpenedArea(result)
-				self.sendOpenedKeys(result)
+				#self.sendOpenedKeys(result)
 		# Если же это пол, то это точно переход между этажами
 		elif cell.type == CT_FLOOR:
 			# Перемещаем юнита
@@ -382,7 +426,7 @@ class FightController:
 			result[floorId] = list(newArea)
 			# Игрокам нужно отправить newArea
 			self.sendOpenedArea(result)
-			self.sendOpenedKeys(result)
+			#self.sendOpenedKeys(result)
 			self.teleportUnit(player, cell.toFloor, cell.toX, cell.toY)
 
 	def teleportUnit(self, unit, floor, x, y):
@@ -463,7 +507,7 @@ class FightController:
 				result[floorId] = list(newArea)
 				# Игрокам нужно отправить newArea
 				self.sendOpenedArea(result)
-				self.sendOpenedKeys(result)
+				#self.sendOpenedKeys(result)
 				self.moveUnit(player, step, step[0], step[1])
 
 	def moveUnit(self, unit, path, x, y):

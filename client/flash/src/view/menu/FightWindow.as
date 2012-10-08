@@ -72,6 +72,7 @@ package view.menu
 			Dispatcher.instance.addEventListener(UserEvent.S_CHAT_MESSAGE, sChatMessage);
 			Dispatcher.instance.addEventListener(UserEvent.MOVE_UNIT, moveUnit);
 			Dispatcher.instance.addEventListener(UserEvent.CHANGE_CELL, changeCell);
+			Dispatcher.instance.addEventListener(UserEvent.TELEPORT_UNIT, teleportUnit);
 			
 			module.enter.addEventListener(MouseEvent.CLICK, enterHandler);
 		}
@@ -88,12 +89,13 @@ package view.menu
 		private function sChatMessage(e:UserEvent):void 
 		{
 			var mes:String = e.data as String;
-			module.output.appendText("\n" + mes);
+			module.output.appendText(mes + "\n");
 			module.output.scrollV = module.output.maxScrollV;
 		}
 		
 		private function startFight(e:UserEvent):void 
 		{
+			var ourFloor:int;
 			// Размещаем игроков
 			for (var id:String in _model.fInfo.players)
 			{
@@ -104,13 +106,22 @@ package view.menu
 				}
 				var floor:Sprite = _floors[o.floorId] as Sprite;
 				// Показываем этаж если мы на нем находимся.
-				module.map.addChild(floor);
+				if (id == String(_model.fInfo.selfId))
+				{
+					module.map.addChild(floor);
+					ourFloor = parseInt(id);
+				}
+				else
+				{
+					module.map.addChildAt(floor, 0);
+				}
 				var player:Unit = new Unit();
 				player.x = o.x * CELL_WIDTH + (o.y % 2 ? CELL_WIDTH / 2 : 0);
 				player.y = o.y * CELL_HEIGHT * 0.75;
 				floor.addChild(player);
 				_units[id] = player;
 			}
+			showFloor(ourFloor);
 		}
 		
 		private function createFloor():Sprite
@@ -118,6 +129,12 @@ package view.menu
 			var floor:Sprite = new Sprite();
 			floor.x = floor.y = 100;
 			return floor;
+		}
+		
+		private function showFloor(floorId:int):void
+		{
+			for (var id:String in _floors)
+				(_floors[id] as DisplayObject).visible = id == String(floorId);
 		}
 		
 		private function areaOpen(e:UserEvent):void 
@@ -135,7 +152,8 @@ package view.menu
 				{
 					_floors[id] = createFloor();
 					var f:Sprite = _floors[id] as Sprite;
-					module.map.addChild(f);
+					f.visible = _model.fInfo.players[_model.fInfo.selfId].floorId == parseInt(id);
+					module.map.addChildAt(f, 0);
 				}
 				var floorInfo:Array = e.data[id] as Array;
 				for (var i:int = 0; i < floorInfo.length; i++)
@@ -147,8 +165,41 @@ package view.menu
 					var cell:Cell_asset = new Cell_asset();
 					cell.addEventListener(MouseEvent.CLICK, cellClickHandler);
 					cell.info = info;
-					if (info.type == CT_FLOOR) cell.gotoAndStop("floor");
-					else cell.gotoAndStop("wall");
+					var s:Shape, g:Graphics;
+					if (info.type == CT_FLOOR)
+					{
+						cell.gotoAndStop("floor");
+						if (info.toFloor >= 0)
+						{
+							s = new Shape();
+							g = s.graphics;
+							g.lineStyle(1);
+							g.beginFill(0x3333FF);
+							g.drawCircle(0, 0, 5);
+							g.endFill();
+							cell.addChild(s);
+						}
+					}
+					else if (info.type == CT_WALL)
+					{
+						cell.gotoAndStop("wall");
+						if (info.key >= 0)
+						{
+							// Нужен какой-нибудь вразумительный сигнал о том, что на данной ячейке появился ключ.
+							s = new Shape();
+							g = s.graphics;
+							g.lineStyle(1);
+							g.beginFill(0xFF0000);
+							g.drawCircle(0, 0, 5);
+							g.endFill();
+							cell.addChild(s);
+						}
+					}
+					else if (info.type == CT_DOOR)
+					{
+						cell.gotoAndStop("wall");
+						/// TODO: Как-то показать замки на двери
+					}
 					// Сохраняем ссылку на ячейку.
 					floor[info.y][info.x] = cell;
 					cell.x = CELL_WIDTH * info.x + (info.y % 2 ? CELL_WIDTH / 2 : 0);
@@ -156,9 +207,6 @@ package view.menu
 					(_floors[id] as DisplayObjectContainer).addChildAt(cell, 0);
 				}
 			}
-			
-			/*var o:Object = _model.fInfo.players["0"];
-			glowRadius(0, floor[0].length, floor.length, o.x, o.y, 0, 2);*/
 		}
 		
 		private function keysOpen(e:UserEvent):void 
@@ -201,9 +249,12 @@ package view.menu
 		{
 			var cell:Cell_asset = e.currentTarget as Cell_asset;
 			if (cell.info.type == CT_FLOOR)
-				Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.C_WANT_MOVE, new Point(cell.info.x, cell.info.y)));
+				if (cell.info.toFloor < 0)
+					Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.C_WANT_MOVE, new Point(cell.info.x, cell.info.y)));
+				else
+					Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.C_ACTION, new Point(cell.info.x, cell.info.y)));
 			// Пока условимся, что кнопки могут быть расположены только на стенах
-			else if (cell.info.type == CT_WALL && !isNaN(cell.info.key))
+			else if (cell.info.type == CT_WALL && cell.info.key >= 0)
 				Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.C_ACTION, new Point(cell.info.x, cell.info.y)));
 		}
 		
@@ -211,6 +262,18 @@ package view.menu
 		{
 			var unit:Unit = _units[e.data.id] as Unit;
 			unit.move(e.data.path as Array);
+		}
+		
+		private function teleportUnit(e:UserEvent):void 
+		{
+			var unit:Unit = _units[e.data.unitId] as Unit;
+			unit.stopMove();
+			var floor:Sprite = _floors[e.data.floor] as Sprite;
+			unit.x = e.data.x * CELL_WIDTH + (e.data.y % 2 ? CELL_WIDTH / 2 : 0);
+			unit.y = e.data.y * CELL_HEIGHT * 0.75;
+			floor.addChild(unit);
+			if (_model.fInfo.selfId == e.data.unitId)
+				showFloor(e.data.floor);
 		}
 		
 		/**
