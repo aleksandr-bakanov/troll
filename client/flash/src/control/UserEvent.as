@@ -41,6 +41,7 @@ package control
 		public static const MOVE_UNIT:String = "move_unit";
 		public static const CHANGE_CELL:String = "change_cell";
 		public static const TELEPORT_UNIT:String = "teleport_unit";
+		public static const YOUR_MOVE:String = "your_move";
 		
 		public var data:Object;
 		

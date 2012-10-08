@@ -10,8 +10,10 @@ package view.menu
 	import flash.display.Shape;
 	import flash.display.Sprite;
 	import flash.events.MouseEvent;
+	import flash.events.TimerEvent;
 	import flash.geom.Point;
 	import flash.utils.Dictionary;
+	import flash.utils.Timer;
 	import model.MainModel;
 	import view.common.Debug;
 	import view.fight.Unit;
@@ -55,6 +57,9 @@ package view.menu
 		// Игроку показывается его текущий уровень.
 		private var _glowedActionRange:Array = [];
 		private var _glowedCells:Array = [];
+		// Таймер хода
+		private var _moveTimer:Timer = new Timer(1000);
+		private var _secondsLeft:int;
 		
 		public function FightWindow(model:MainModel) 
 		{
@@ -62,6 +67,8 @@ package view.menu
 			module = new FightWindow_asset();
 			addChild(module);
 			configureHandlers();
+			_moveTimer.addEventListener(TimerEvent.TIMER, moveTimerHandler);
+			module.time.textColor = 0x000000;
 		}
 		
 		private function configureHandlers():void
@@ -73,8 +80,31 @@ package view.menu
 			Dispatcher.instance.addEventListener(UserEvent.MOVE_UNIT, moveUnit);
 			Dispatcher.instance.addEventListener(UserEvent.CHANGE_CELL, changeCell);
 			Dispatcher.instance.addEventListener(UserEvent.TELEPORT_UNIT, teleportUnit);
+			Dispatcher.instance.addEventListener(UserEvent.YOUR_MOVE, yourMove);
 			
 			module.enter.addEventListener(MouseEvent.CLICK, enterHandler);
+		}
+		
+		private function yourMove(e:UserEvent):void 
+		{
+			Debug.out(e.data.unitId + " : " + _model.fInfo.selfId + " (" + e.data.seconds + ")");
+			if (e.data.unitId == _model.fInfo.selfId)
+			{
+				_secondsLeft = e.data.seconds;
+				_moveTimer.start();
+			}
+		}
+		
+		private function moveTimerHandler(e:TimerEvent):void 
+		{
+			Debug.out("timer: " + _secondsLeft);
+			if (!_secondsLeft)
+			{
+				_moveTimer.stop();
+				return;
+			}
+			module.time.text = String(_secondsLeft);
+			_secondsLeft--;
 		}
 		
 		private function enterHandler(e:MouseEvent):void 

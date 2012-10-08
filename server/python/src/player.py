@@ -241,6 +241,10 @@ class Player:
 	def sTeleportUnit(self, unitId, floor, x, y):
 		data = pack('<ihbbhh', 8, S_TELEPORT_UNIT, unitId, floor, x, y)
 		self.sendData(data)
+
+	def sYourMove(self, unitId, seconds):
+		data = pack('<ihbb', 4, S_YOUR_MOVE, unitId, seconds)
+		self.sendData(data)
 		
 	
 	# ==================================================================

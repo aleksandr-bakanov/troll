@@ -3,6 +3,7 @@ from math import *
 from consts import *
 from random import shuffle
 from struct import pack
+import threading
 
 # ======================================================================
 #
@@ -58,28 +59,52 @@ class Cell:
 class FightController:
 	def __init__(self, players):
 		self.players = players
+		i = 0
 		for p in players:
 			if p:
 				p.fightController = self
+				p.fInfo["x"] = 1 + i
+				p.fInfo["y"] = 1
+				p.fInfo["floor"] = 0
+				p.fInfo["id"] = i
+				i += 1
 		# Список для отдельного хранения дверей
 		self.doors = []
 		# Создаем карту
 		self.map = self.createMap()
-		# Расставляем игроков
-		# Пока (и впредь?) будем расставлять игроков
-		# так, чтобы в первый ход не пришлось встраивать в порядок
-		# ходов мобов.
-		self.players[0].fInfo["x"] = 1
-		self.players[0].fInfo["y"] = 1
-		self.players[0].fInfo["floor"] = 0
-		self.players[0].fInfo["id"] = 0
-		
 		self.knownArea = self.getKnownArea()
 		self.moveOrder = self.createMoveOrder()
 		self.sendStartInfo()
 		# Отправляем известную территорию
 		self.sendOpenedArea(self.knownArea)
 		#self.sendOpenedKeys(self.knownArea)
+		# Переменная currentUnit содержит индекс id игрока в списке moveOrder,
+		# которому дозволено совершать действия в данный момент.
+		self.currentUnit = -1
+		# Таймер ожидания хода
+		self.nextMoveTimer = None
+		# Запускаем первый ход
+		self.nextMove()
+
+	def nextMove(self):
+		# Проверяем не нужно ли выключить предыдущий таймер
+		# (такое может требоваться, если функция nextMove была вызвана не из таймера)
+		if self.nextMoveTimer and self.nextMoveTimer.is_alive():
+			self.nextMoveTimer.cancel()
+		# Передаем ход следующему юниту
+		self.currentUnit += 1
+		if self.currentUnit >= len(self.moveOrder):
+			self.currentUnit = 0
+		# TODO: Здесь нужно проверять кто следующий юнит, если человек,
+		# отправлять всем команду S_YOUR_MOVE, если бот, запускать ИИ.
+		
+		# Сначала отправляем команду
+		for p in self.players:
+			if p:
+				p.sYourMove(self.moveOrder[self.currentUnit], SECONDS_TO_MOVE)
+		# Затем запускаем таймер ожидания
+		self.nextMoveTimer = threading.Timer(SECONDS_TO_MOVE, self.nextMove)
+		self.nextMoveTimer.start()
 		
 	# Отправка клиентам начальной информации о бое.
 	def sendStartInfo(self):
@@ -246,19 +271,10 @@ class FightController:
 			map[0].append([])
 			while x < sizeX:
 				cell = Cell(0, x, y)
-				if x == 0 or x == sizeX - 1 or y == 0 or y == sizeY - 1 or y == 2:
+				if x == 0 or x == sizeX - 1 or y == 0 or y == sizeY - 1:
 					cell.type = CT_WALL
 				else:
 					cell.type = CT_FLOOR
-				if x == 2 and y == 2:
-					cell.key = 0
-				if x == 3 and y == 2:
-					cell.type = CT_DOOR
-					cell.keys = [0]
-				if x == 4 and y == 1:
-					cell.toFloor = 1
-					cell.toX = 1
-					cell.toY = 1
 				map[0][y].append(cell)
 				if cell.type == CT_DOOR:
 					self.doors.append(cell)
@@ -274,14 +290,10 @@ class FightController:
 			map[1].append([])
 			while x < sizeX:
 				cell = Cell(0, x, y)
-				if x == 0 or x == sizeX - 1 or y == 0 or y == sizeY - 1 or y == 2:
+				if x == 0 or x == sizeX - 1 or y == 0 or y == sizeY - 1:
 					cell.type = CT_WALL
 				else:
 					cell.type = CT_FLOOR
-				if x == 2 and y == 1:
-					cell.toFloor = 0
-					cell.toX = 1
-					cell.toY = 3
 				map[1][y].append(cell)
 				if cell.type == CT_DOOR:
 					self.doors.append(cell)
@@ -296,6 +308,8 @@ class FightController:
 				p.sChatMessage(message)
 
 	def finishFight(self):
+		if self.nextMoveTimer and self.nextMoveTimer.is_alive():
+			self.nextMoveTimer.cancel()
 		for p in self.players:
 			if p:
 				p.fightController = None
@@ -311,6 +325,10 @@ class FightController:
 		id = 0
 		for p in self.players:
 			if p == player:
+				# Удалим игрока также из moveOrder
+				if self.moveOrder.index(p.fInfo["id"]) >= self.currentUnit:
+					self.currentUnit -= 1
+				self.moveOrder.remove(p.fInfo["id"])
 				self.players[id] = None
 				break
 			id += 1
@@ -357,6 +375,9 @@ class FightController:
 		return result
 
 	def unitWantAction(self, player, x, y):
+		# Проверка дозволенности хода
+		if player.fInfo["id"] != self.moveOrder[self.currentUnit]:
+			return
 		# Взаимодействовать с ячейкой можно только находясь в непосредственной близости от нее
 		floorId = player.fInfo["floor"]
 		xs = player.fInfo["x"]
@@ -473,6 +494,9 @@ class FightController:
 				p.sChangeCell(cell.floor, cell.x, cell.y, cell.type)
 
 	def unitWantMove(self, player, x, y):
+		# Проверка дозволенности хода
+		if player.fInfo["id"] != self.moveOrder[self.currentUnit]:
+			return
 		# Впоследствии сюда нужно вставить проверку на то, что ходит действительно этот игрок
 		floor = player.fInfo["floor"]
 		px = player.fInfo["x"]

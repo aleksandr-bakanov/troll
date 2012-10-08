@@ -189,6 +189,7 @@ package control
 				case S_MOVE_UNIT: sMoveUnit(); break;
 				case S_CHANGE_CELL: sChangeCell(); break;
 				case S_TELEPORT_UNIT: sTeleportUnit(); break;
+				case S_YOUR_MOVE: sYourMove(); break;
 				default: break;
 			}
 			_lastComSize = 0;
@@ -440,6 +441,13 @@ package control
 			var x:int = _socket.readShort();
 			var y:int = _socket.readShort();
 			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.TELEPORT_UNIT, { unitId:unitId, floor:floor, x:x, y:y } ));
+		}
+		
+		private function sYourMove():void 
+		{
+			var unitId:int = _socket.readByte();
+			var seconds:int = _socket.readByte();
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.YOUR_MOVE, { unitId:unitId, seconds:seconds } ));
 		}
 
 
