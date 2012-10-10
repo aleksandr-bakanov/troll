@@ -37,11 +37,13 @@ package control
 		public static const S_CHAT_MESSAGE:String = "s_chat_message";
 		public static const C_CHAT_MESSAGE:String = "c_chat_message";
 		public static const C_WANT_MOVE:String = "c_want_move";
+		public static const C_WANT_ATTACK:String = "c_want_attack";
 		public static const C_ACTION:String = "c_action";
 		public static const MOVE_UNIT:String = "move_unit";
 		public static const CHANGE_CELL:String = "change_cell";
 		public static const TELEPORT_UNIT:String = "teleport_unit";
 		public static const YOUR_MOVE:String = "your_move";
+		public static const CHANGE_WEAPON:String = "change_weapon";
 		
 		public var data:Object;
 		

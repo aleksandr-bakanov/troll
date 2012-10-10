@@ -1,7 +1,7 @@
 # coding=utf-8
 from math import *
 from consts import *
-from random import shuffle
+from random import *
 from struct import pack
 import threading
 
@@ -67,6 +67,8 @@ class FightController:
 				p.fInfo["y"] = 1
 				p.fInfo["floor"] = 0
 				p.fInfo["id"] = i
+				# Создадим ссылку на текущее оружие
+				p.fInfo["curWeapon"] = p.params["handWeapon"]
 				i += 1
 		# Список для отдельного хранения дверей
 		self.doors = []
@@ -103,7 +105,7 @@ class FightController:
 			if p:
 				p.sYourMove(self.moveOrder[self.currentUnit], SECONDS_TO_MOVE)
 		# Затем запускаем таймер ожидания
-		self.nextMoveTimer = threading.Timer(SECONDS_TO_MOVE, self.nextMove)
+		self.nextMoveTimer = threading.Timer(SECONDS_TO_MOVE + 1, self.nextMove)
 		self.nextMoveTimer.start()
 		
 	# Отправка клиентам начальной информации о бое.
@@ -235,7 +237,7 @@ class FightController:
 		del self.map
 		del self.knownArea
 		del self.doors
-		print "FightController deleted."
+		print "~FightController"
 
 	# Функция определят какое поле известно игрокам в данный момент.
 	def getKnownArea(self):
@@ -271,6 +273,7 @@ class FightController:
 			map[0].append([])
 			while x < sizeX:
 				cell = Cell(0, x, y)
+				cell.hp = 1
 				if x == 0 or x == sizeX - 1 or y == 0 or y == sizeY - 1:
 					cell.type = CT_WALL
 				else:
@@ -310,14 +313,18 @@ class FightController:
 	def finishFight(self):
 		if self.nextMoveTimer and self.nextMoveTimer.is_alive():
 			self.nextMoveTimer.cancel()
+		self.nextMoveTimer = None
+		id = 0
 		for p in self.players:
 			if p:
 				p.fightController = None
-				self.removePlayer(p)
+				self.players[id] = None
+			id += 1
 		self.map = None
 		self.knownArea = None
 		self.moveOrder = None
-		del self
+		self.players = None
+		#del self
 
 	# Удаление игрока в случае его отключения. Надо сюда дописать
 	# умершвление уходящего игрока.
@@ -375,6 +382,7 @@ class FightController:
 		return result
 
 	def unitWantAction(self, player, x, y):
+		print "action",x,y
 		# Проверка дозволенности хода
 		if player.fInfo["id"] != self.moveOrder[self.currentUnit]:
 			return
@@ -493,7 +501,56 @@ class FightController:
 			if p:
 				p.sChangeCell(cell.floor, cell.x, cell.y, cell.type)
 
+	def unitWantAttack(self, player, x, y):
+		unit = self.getUnitByCoordinates(player.fInfo["floor"], x, y)
+		damage = 0
+		if player.fInfo["curWeapon"]:
+			damage = self.getDamage(player.fInfo["curWeapon"]["damage"])
+		else:
+			damage = self.getDamage("1k")
+		if unit:
+			# Атакуем юнита
+			# TODO: добавить сюда сопротивление цели
+			if unit.params["hitPoints"] > 0:
+				unit.params["hitPoints"] -= damage
+				for p in self.players:
+					if p:
+						p.sUnitDamage(damage, unit.fInfo["id"])
+
+		elif self.map[player.fInfo["floor"]][y][x].type == CT_WALL:
+			cell = self.map[player.fInfo["floor"]][y][x]
+			if cell.hp > 0:
+				# Атакуем стену
+				cell.hp -= damage
+				if cell.hp <= 0:
+					cell.hp = 0
+					self.changeCellType(cell, CT_FLOOR)
+
+
+	def getDamage(self, damageStr):
+		arr = damageStr.split('k')
+		k = int(arr[0])
+		m = 0
+		if len(arr) == 2:
+			m = int(arr[1])
+		damage = 0
+		for i in range(k):
+			damage += randint(1, 6)
+		damage += m
+		return damage
+
+	def getUnitByCoordinates(self, floor, x, y):
+		unit = None
+		for p in self.players:
+			if p:
+				if p.fInfo["floor"] == floor and p.fInfo["x"] == x and p.fInfo["y"] == y:
+					unit = p
+					break
+		return unit
+
+
 	def unitWantMove(self, player, x, y):
+		print "move",x,y
 		# Проверка дозволенности хода
 		if player.fInfo["id"] != self.moveOrder[self.currentUnit]:
 			return

@@ -97,6 +97,8 @@ package control
 			Dispatcher.instance.addEventListener(UserEvent.C_CHAT_MESSAGE, cChatMessage);
 			Dispatcher.instance.addEventListener(UserEvent.C_WANT_MOVE, cWantMove);
 			Dispatcher.instance.addEventListener(UserEvent.C_ACTION, cAction);
+			Dispatcher.instance.addEventListener(UserEvent.CHANGE_WEAPON, cChangeWeapon);
+			Dispatcher.instance.addEventListener(UserEvent.C_WANT_ATTACK, cAttack);
 		}
 		
 		private function configureSocket():void
@@ -190,6 +192,7 @@ package control
 				case S_CHANGE_CELL: sChangeCell(); break;
 				case S_TELEPORT_UNIT: sTeleportUnit(); break;
 				case S_YOUR_MOVE: sYourMove(); break;
+				case S_UNIT_DAMAGE: sUnitDamage(); break;
 				default: break;
 			}
 			_lastComSize = 0;
@@ -449,6 +452,19 @@ package control
 			var seconds:int = _socket.readByte();
 			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.YOUR_MOVE, { unitId:unitId, seconds:seconds } ));
 		}
+		
+		private function sUnitDamage():void 
+		{
+			var unitId:int = _socket.readByte();
+			if (unitId < 0)
+			{
+				var floor:int = _socket.readByte();
+				var x:int = _socket.readShort();
+				var y:int = _socket.readShort();
+			}
+			var damage:int = _socket.readByte();
+			Debug.out("unitId = " + unitId + "; damage = " + damage);
+		}
 
 
 		//=============================================================
@@ -586,6 +602,23 @@ package control
 			var point:Point = e.data as Point;
 			_socket.writeInt(6);
 			_socket.writeShort(C_ACTION);
+			_socket.writeShort(point.x);
+			_socket.writeShort(point.y);
+			_socket.flush();
+		}
+		
+		private function cChangeWeapon(e:UserEvent):void 
+		{
+			_socket.writeInt(2);
+			_socket.writeShort(C_CHANGE_WEAPON);
+			_socket.flush();
+		}
+		
+		private function cAttack(e:UserEvent):void 
+		{
+			var point:Point = e.data as Point;
+			_socket.writeInt(6);
+			_socket.writeShort(C_ATTACK);
 			_socket.writeShort(point.x);
 			_socket.writeShort(point.y);
 			_socket.flush();

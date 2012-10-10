@@ -46,7 +46,7 @@ class Player:
 		self.sendBidsList()
 
 	def __del__(self):
-		print "Player (", self.id, self.name, ") deleted."
+		print "~Player (", self.id, self.name, ") deleted."
 
 	# ==================================================================
 	# Две основные функции run и parse
@@ -148,6 +148,14 @@ class Player:
 					operatedBytes += self.cWantMove(data[operatedBytes:])
 				elif comId == C_ACTION:
 					operatedBytes += self.cAction(data[operatedBytes:])
+				elif comId == C_CHANGE_WEAPON:
+					operatedBytes += self.cChangeWeapon(data[operatedBytes:])
+				elif comId == C_ATTACK:
+					operatedBytes += self.cAttack(data[operatedBytes:])
+				# Если это ни одна из ожидаемых команд, игнорируем весь кусок
+				# присланных данных
+				else:
+					return totalBytes
 				# После обработки одной команды смотрим, есть ли еще
 				# что обработать.
 				# Если мы обработали все байты, переданные нам, возвращаем
@@ -244,6 +252,14 @@ class Player:
 
 	def sYourMove(self, unitId, seconds):
 		data = pack('<ihbb', 4, S_YOUR_MOVE, unitId, seconds)
+		self.sendData(data)
+
+	def sUnitDamage(self, damage, unitId, floor=-1, x=-1, y=-1):
+		data = None
+		if unitId >= 0:
+			data = pack('<ihbb', 4, S_UNIT_DAMAGE, unitId, damage)
+		else:
+			data = pack('<ihbhh', 8, S_UNIT_DAMAGE, floor, x, y, damage)
 		self.sendData(data)
 		
 	
@@ -429,6 +445,21 @@ class Player:
 		y = getShort(data, 2)
 		if self.fightController:
 			self.fightController.unitWantAction(self, x, y)
+		return SHORT_SIZE * 2
+
+	def cChangeWeapon(self, data):
+		if self.fightController:
+			if self.fInfo["curWeapon"] == self.params["handWeapon"]:
+				self.fInfo["curWeapon"] = self.params["beltWeapon"]
+			else:
+				self.fInfo["curWeapon"] = self.params["handWeapon"]
+		return 0
+
+	def cAttack(self, data):
+		x = getShort(data, 0)
+		y = getShort(data, 2)
+		if self.fightController:
+			self.fightController.unitWantAttack(self, x, y)
 		return SHORT_SIZE * 2
 
 	# ==================================================================

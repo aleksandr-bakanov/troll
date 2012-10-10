@@ -68,7 +68,6 @@ package view.menu
 			addChild(module);
 			configureHandlers();
 			_moveTimer.addEventListener(TimerEvent.TIMER, moveTimerHandler);
-			module.time.textColor = 0x000000;
 		}
 		
 		private function configureHandlers():void
@@ -83,11 +82,42 @@ package view.menu
 			Dispatcher.instance.addEventListener(UserEvent.YOUR_MOVE, yourMove);
 			
 			module.enter.addEventListener(MouseEvent.CLICK, enterHandler);
+			module.change.addEventListener(MouseEvent.CLICK, changeHandler);
+			module.attack.addEventListener(MouseEvent.CLICK, attackHandler);
+		}
+		
+		private function attackHandler(e:MouseEvent):void 
+		{
+			var range:int = _model.params.handWeapon ? _model.params.handWeapon.range : 1;
+			var o:Object = _model.fInfo.players[_model.fInfo.selfId];
+			var floor:int = o.floorId;
+			var width:int = 0;
+			for (var i:int = 0; i < _cells[floor].length; i++)
+				if (width < _cells[floor][i].length)
+					width = _cells[floor][i].length;
+			var height:int = _cells[floor].length;
+			var xc:int = o.x;
+			var yc:int = o.y;
+			glowRadius(_model.fInfo.floor, width, height, xc, yc, 0, 2/*range*/, true);
+		}
+		
+		private function changeHandler(e:MouseEvent):void 
+		{
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.CHANGE_WEAPON));
+			/// TODO: Вдальнейшем, возможно, нужно будет поменять принцип хранения информации о текущем оружии.
+			if (_model.params.curWeapon == _model.params.handWeapon)
+				_model.params.curWeapon = _model.params.beltWeapon;
+			else
+				_model.params.curWeapon = _model.params.handWeapon;
+			if (_model.params.curWeapon)
+				module.weapon.text = _model.params.curWeapon.name;
+			else
+				module.weapon.text = "None";
+			
 		}
 		
 		private function yourMove(e:UserEvent):void 
 		{
-			Debug.out(e.data.unitId + " : " + _model.fInfo.selfId + " (" + e.data.seconds + ")");
 			if (e.data.unitId == _model.fInfo.selfId)
 			{
 				_secondsLeft = e.data.seconds;
@@ -97,10 +127,10 @@ package view.menu
 		
 		private function moveTimerHandler(e:TimerEvent):void 
 		{
-			Debug.out("timer: " + _secondsLeft);
 			if (!_secondsLeft)
 			{
 				_moveTimer.stop();
+				module.time.text = "-";
 				return;
 			}
 			module.time.text = String(_secondsLeft);
@@ -152,6 +182,12 @@ package view.menu
 				_units[id] = player;
 			}
 			showFloor(ourFloor);
+			// В начале боя текущим оружием является то, что в руках.
+			_model.params.curWeapon = _model.params.handWeapon;
+			if (_model.params.curWeapon)
+				module.weapon.text = _model.params.curWeapon.name;
+			else
+				module.weapon.text = "None";
 		}
 		
 		private function createFloor():Sprite
@@ -199,6 +235,7 @@ package view.menu
 					if (info.type == CT_FLOOR)
 					{
 						cell.gotoAndStop("floor");
+						cell.previousState = "floor";
 						if (info.toFloor >= 0)
 						{
 							s = new Shape();
@@ -213,6 +250,7 @@ package view.menu
 					else if (info.type == CT_WALL)
 					{
 						cell.gotoAndStop("wall");
+						cell.previousState = "wall";
 						if (info.key >= 0)
 						{
 							// Нужен какой-нибудь вразумительный сигнал о том, что на данной ячейке появился ключ.
@@ -228,6 +266,7 @@ package view.menu
 					else if (info.type == CT_DOOR)
 					{
 						cell.gotoAndStop("wall");
+						cell.previousState = "wall";
 						/// TODO: Как-то показать замки на двери
 					}
 					// Сохраняем ссылку на ячейку.
@@ -271,18 +310,34 @@ package view.menu
 			var cell:Cell_asset = floor[e.data.y][e.data.x] as Cell_asset;
 			if (!cell) return;
 			cell.info.type = e.data.type;
-			if (cell.info.type == CT_FLOOR) cell.gotoAndStop("floor");
-			else cell.gotoAndStop("wall");
+			if (cell.info.type == CT_FLOOR)
+			{
+				cell.gotoAndStop("floor");
+				cell.previousState = "floor";
+			}
+			else
+			{
+				cell.gotoAndStop("wall");
+				cell.previousState = "wall";
+			}
 		}
 		
 		private function cellClickHandler(e:MouseEvent):void 
 		{
 			var cell:Cell_asset = e.currentTarget as Cell_asset;
-			if (cell.info.type == CT_FLOOR)
-				if (cell.info.toFloor < 0)
+			// Проверим не была ли эта ячейка инициирована для атаки
+			if (cell.currentFrameLabel == "red")
+			{
+				removeAllowedCellsGlowing();
+				Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.C_WANT_ATTACK, new Point(cell.info.x, cell.info.y)));
+			}
+			else if (cell.info.type == CT_FLOOR)
+			{
+				if (cell.info.toFloor < 0 || isNaN(cell.info.toFloor))
 					Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.C_WANT_MOVE, new Point(cell.info.x, cell.info.y)));
 				else
 					Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.C_ACTION, new Point(cell.info.x, cell.info.y)));
+			}
 			// Пока условимся, что кнопки могут быть расположены только на стенах
 			else if (cell.info.type == CT_WALL && cell.info.key >= 0)
 				Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.C_ACTION, new Point(cell.info.x, cell.info.y)));
@@ -290,13 +345,21 @@ package view.menu
 		
 		private function moveUnit(e:UserEvent):void 
 		{
+			removeAllowedCellsGlowing();
 			var unit:Unit = _units[e.data.id] as Unit;
-			unit.move(e.data.path as Array);
+			var o:Object = _model.fInfo.players[e.data.id];
+			var path:Array = e.data.path as Array;
+			o.x = path[path.length - 1].x;
+			o.y = path[path.length - 1].y;
+			unit.move(path);
 		}
 		
 		private function teleportUnit(e:UserEvent):void 
 		{
+			// На всякий случай удалим возможно подсвеченные клетки.
+			removeAllowedCellsGlowing();
 			var unit:Unit = _units[e.data.unitId] as Unit;
+			_model.fInfo.players[e.data.id].floorId = e.data.floor;
 			unit.stopMove();
 			var floor:Sprite = _floors[e.data.floor] as Sprite;
 			unit.x = e.data.x * CELL_WIDTH + (e.data.y % 2 ? CELL_WIDTH / 2 : 0);
@@ -389,8 +452,6 @@ package view.menu
 				cell = cells[yc][xc] as MovieClip;
 				array.push( { cell:cell, x:xc, y:yc } );
 			}
-			
-			//Debug.out("array.length = " + array.length);
 			
 			// Теперь, если ячейки необходимо подсветить серым цветом, т.е. не для показа радиуса
 			// зонной атаки, нужно исключить из массива те ячейки которые будут недоступны из-за
@@ -505,8 +566,12 @@ package view.menu
 		{
 			var r:Array = [];
 			for (var i:int = 0; i < cells.length; i++)
+			{
+				if (!cells[i].cell)
+					continue;
 				if (!(exceptX == cells[i].x && exceptY == cells[i].y) && cells[i].cell.info.type == CT_WALL)
 					r.push(new Point(cells[i].x, cells[i].y));
+			}
 			return r;
 		}
 		
@@ -519,14 +584,10 @@ package view.menu
 			for (var i:int = 0; i < cells.length; i++)
 			{
 				var o:Object = cells[i];
-				// Проверим можно ли атаковать эту ячейку
-				//if (_mainModel.fightInfo.cells[o.y][o.x] & EFFECT_ATTACK)
+				if (_glowedActionRange.indexOf(o.cell) < 0)
 				{
-					if (_glowedActionRange.indexOf(o.cell) < 0)
-					{
-						_glowedActionRange.push(o.cell);
-						o.cell.gotoAndStop("red");
-					}
+					_glowedActionRange.push(o.cell);
+					o.cell.gotoAndStop("red");
 				}
 			}
 		}
@@ -550,22 +611,25 @@ package view.menu
 			{
 				var o:Object = cells[i];
 				// Сохраняем ячейку в массиве _glowedCells
-				// Здесь проверяем нет ли какого игрока на этой ячейке.
-				//var canGlow:Boolean = true;
-				var canGlow:Boolean = o.cell.info.type == CT_FLOOR;
-				/*if (_currentAction == FightSkills.ACTION_SIMPLE_WALK)
-					canGlow = Boolean(_mainModel.fightInfo.cells[o.y][o.x] & EFFECT_WALK);
-				else
-					canGlow = Boolean(_mainModel.fightInfo.cells[o.y][o.x] & EFFECT_ATTACK);*/
+				var canGlow:Boolean = o.cell.info.type == CT_FLOOR || o.cell.info.type == CT_WALL;
 				if (canGlow)
 				{
 					_glowedCells.push(o.cell);
-					o.cell.gotoAndStop("green");
-					o.cell.previousState = "green";
-					/*o.cell.addEventListener(MouseEvent.ROLL_OVER, rollOverGlowedCellHandler);
-					o.cell.addEventListener(MouseEvent.ROLL_OUT, rollOutGlowedCellHandler);
-					o.cell.addEventListener(MouseEvent.MOUSE_DOWN, mouseDownGlowedCellHandler);*/
+					o.cell.gotoAndStop("red");
 				}
+			}
+		}
+		
+		/**
+		 * Удаляем повсветку дозволенных ячеек и слушатели событий.
+		 */
+		private function removeAllowedCellsGlowing():void
+		{
+			var cell:MovieClip;
+			while (_glowedCells.length)
+			{
+				cell = _glowedCells.pop() as MovieClip;
+				cell.gotoAndStop(cell.previousState);
 			}
 		}
 		
