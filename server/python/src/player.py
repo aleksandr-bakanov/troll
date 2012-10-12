@@ -261,6 +261,14 @@ class Player:
 		else:
 			data = pack('<ihbhh', 8, S_UNIT_DAMAGE, floor, x, y, damage)
 		self.sendData(data)
+
+	def sKillUnit(self, unitId):
+		data = pack('<ihb', 3, S_KILL_UNIT, unitId)
+		self.sendData(data)
+
+	def sFinishFight(self):
+		data = pack('<ih', 2, S_FINISH_FIGHT)
+		self.sendData(data)
 		
 	
 	# ==================================================================
@@ -407,7 +415,7 @@ class Player:
 	# Функция выполняет запрос клиента на вступление в заявку.
 	def cEnterBid(self, data):
 		id = getShort(data, 0)
-		if self.bidId == -1:
+		if self.bidId == -1 and self.params["hitPoints"] > 0:
 			self.bidsController.addPlayerToBid(id, self)
 		return SHORT_SIZE
 
@@ -422,7 +430,7 @@ class Player:
 	def cCreateBid(self, data):
 		count = getChar(data, 0)
 		name = getUTF(data, 1)
-		if self.bidId == -1 and count >= 1 and count <= 6:
+		if self.bidId == -1 and count >= 1 and count <= 6 and self.params["hitPoints"] > 0:
 			self.bidsController.createBid(self, self.params["usedOP"], count, name)
 		return CHAR_SIZE + SHORT_SIZE + len(name)
 
@@ -440,7 +448,6 @@ class Player:
 		return SHORT_SIZE * 2
 
 	def cAction(self, data):
-		# TODO: Кажется сервер виснет если ему прислать неизвестную команду. А их нужно игнорировать.
 		x = getShort(data, 0)
 		y = getShort(data, 2)
 		if self.fightController:
@@ -483,7 +490,7 @@ class Player:
 		self.bidsController.lock.acquire()
 		for b in self.bidsController.bids:
 			if b:
-				self.sNewBid(id, b.op, b.count, b.curcount, b.name)
+				self.sNewBid(b.id, b.op, b.count, b.curcount, b.name)
 		self.bidsController.lock.release()
 
 	# Функция инициализации рюкзака. Функция разворачивает запись

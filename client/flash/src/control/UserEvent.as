@@ -44,6 +44,7 @@ package control
 		public static const TELEPORT_UNIT:String = "teleport_unit";
 		public static const YOUR_MOVE:String = "your_move";
 		public static const CHANGE_WEAPON:String = "change_weapon";
+		public static const FINISH_FIGHT:String = "finish_fight";
 		
 		public var data:Object;
 		

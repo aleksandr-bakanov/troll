@@ -97,6 +97,10 @@ class FightController:
 		self.currentUnit += 1
 		if self.currentUnit >= len(self.moveOrder):
 			self.currentUnit = 0
+		# Если все неожиданно ушли или умерли, т.е. в moveOrder никого больше не осталось, то завершаем бой
+		if len(self.moveOrder) == 0:
+			self.finishFight()
+			return
 		# TODO: Здесь нужно проверять кто следующий юнит, если человек,
 		# отправлять всем команду S_YOUR_MOVE, если бот, запускать ИИ.
 		
@@ -317,6 +321,7 @@ class FightController:
 		id = 0
 		for p in self.players:
 			if p:
+				p.sFinishFight()
 				p.fightController = None
 				self.players[id] = None
 			id += 1
@@ -333,9 +338,15 @@ class FightController:
 		for p in self.players:
 			if p == player:
 				# Удалим игрока также из moveOrder
-				if self.moveOrder.index(p.fInfo["id"]) >= self.currentUnit:
+				i = -1
+				try:
+					i = self.moveOrder.index(p.fInfo["id"])
+				except ValueError:
+					pass
+				if i >= 0 and i >= self.currentUnit:
 					self.currentUnit -= 1
-				self.moveOrder.remove(p.fInfo["id"])
+				if i >= 0:
+					self.moveOrder.remove(p.fInfo["id"])
 				self.players[id] = None
 				break
 			id += 1
@@ -382,9 +393,8 @@ class FightController:
 		return result
 
 	def unitWantAction(self, player, x, y):
-		print "action",x,y
 		# Проверка дозволенности хода
-		if player.fInfo["id"] != self.moveOrder[self.currentUnit]:
+		if player.params["hitPoints"] <= 0 or player.fInfo["id"] != self.moveOrder[self.currentUnit]:
 			return
 		# Взаимодействовать с ячейкой можно только находясь в непосредственной близости от нее
 		floorId = player.fInfo["floor"]
@@ -502,7 +512,14 @@ class FightController:
 				p.sChangeCell(cell.floor, cell.x, cell.y, cell.type)
 
 	def unitWantAttack(self, player, x, y):
-		unit = self.getUnitByCoordinates(player.fInfo["floor"], x, y)
+		# Проверка дозволенности хода
+		if player.params["hitPoints"] <= 0 or player.fInfo["id"] != self.moveOrder[self.currentUnit]:
+			return
+		# Проверка на неверные координаты
+		floor = player.fInfo["floor"]
+		if y < 0 or y >= len(self.map[floor]) or x < 0 or x >= len(self.map[floor][y]):
+			return
+		unit = self.getUnitByCoordinates(floor, x, y)
 		damage = 0
 		if player.fInfo["curWeapon"]:
 			damage = self.getDamage(player.fInfo["curWeapon"]["damage"])
@@ -516,9 +533,26 @@ class FightController:
 				for p in self.players:
 					if p:
 						p.sUnitDamage(damage, unit.fInfo["id"])
+				# Если юнит умер, сообщаем об этом. Кроме того нужно исключить его
+				# из списка moveOrder, чтобы ему не передавался ход.
+				# Если гибнет последний игрок, бой заканчивается (нужна отдельная функция
+				# проверки завершения боя, т.к. могут быть различные условия его завершения)
+				if unit.params["hitPoints"] <= 0:
+					unit.params["hitPoints"] = 0
+					for p in self.players:
+						if p:
+							# Шлём известие о смерти юнита
+							p.sKillUnit(unit.fInfo["id"])
+							# Если это умирающий юнит
+							if p == unit:
+								# Удалим его также из moveOrder
+								if self.moveOrder.index(unit.fInfo["id"]) >= self.currentUnit:
+									self.currentUnit -= 1
+								self.moveOrder.remove(unit.fInfo["id"])
 
-		elif self.map[player.fInfo["floor"]][y][x].type == CT_WALL:
-			cell = self.map[player.fInfo["floor"]][y][x]
+
+		elif self.map[floor][y][x].type == CT_WALL:
+			cell = self.map[floor][y][x]
 			if cell.hp > 0:
 				# Атакуем стену
 				cell.hp -= damage
@@ -531,7 +565,7 @@ class FightController:
 		arr = damageStr.split('k')
 		k = int(arr[0])
 		m = 0
-		if len(arr) == 2:
+		if len(arr) == 2 and arr[1] != '':
 			m = int(arr[1])
 		damage = 0
 		for i in range(k):
@@ -550,12 +584,13 @@ class FightController:
 
 
 	def unitWantMove(self, player, x, y):
-		print "move",x,y
 		# Проверка дозволенности хода
-		if player.fInfo["id"] != self.moveOrder[self.currentUnit]:
+		if player.params["hitPoints"] <= 0 or player.fInfo["id"] != self.moveOrder[self.currentUnit]:
 			return
-		# Впоследствии сюда нужно вставить проверку на то, что ходит действительно этот игрок
+		# Проверка на неверные координаты
 		floor = player.fInfo["floor"]
+		if y < 0 or y >= len(self.map[floor]) or x < 0 or x >= len(self.map[floor][y]):
+			return
 		px = player.fInfo["x"]
 		py = player.fInfo["y"]
 		if x < 0 or y < 0 or self.map[floor][y][x].type != CT_FLOOR:
@@ -677,7 +712,7 @@ class FightController:
 			# To up-left
 			# Здесь нужно уточнить координату X, т.к. она зависит от координаты Y.
 			newX = cc.x if cc.y % 2 else cc.x - 1
-			if cc.y - 1 >= 0 and map[cc.y - 1][newX] != 0 and self.exist(newX, cc.y - 1, close) < 0:
+			if cc.y - 1 >= 0 and newX < len(map[cc.y - 1]) and map[cc.y - 1][newX] != 0 and self.exist(newX, cc.y - 1, close) < 0:
 				acIndex = self.exist(newX, cc.y - 1, open)
 				if acIndex < 0:
 					ac = aStarCell(newX, cc.y - 1, cc.x, cc.y)
@@ -694,7 +729,7 @@ class FightController:
 						ac.f = ac.g + ac.h
 			# To up-right
 			newX = cc.x + 1 if cc.y % 2 else cc.x
-			if cc.y - 1 >= 0 and map[cc.y - 1][newX] != 0 and self.exist(newX, cc.y - 1, close) < 0:
+			if cc.y - 1 >= 0 and newX < len(map[cc.y - 1]) and map[cc.y - 1][newX] != 0 and self.exist(newX, cc.y - 1, close) < 0:
 				acIndex = self.exist(newX, cc.y - 1, open)
 				if acIndex < 0:
 					ac = aStarCell(newX, cc.y - 1, cc.x, cc.y)
@@ -711,7 +746,7 @@ class FightController:
 						ac.f = ac.g + ac.h
 			# To down-left
 			newX = cc.x if cc.y % 2 else cc.x - 1
-			if cc.y + 1 < sizeY and map[cc.y + 1][newX] != 0 and self.exist(newX, cc.y + 1, close) < 0:
+			if cc.y + 1 < sizeY and newX < len(map[cc.y + 1]) and map[cc.y + 1][newX] != 0 and self.exist(newX, cc.y + 1, close) < 0:
 				acIndex = self.exist(newX, cc.y + 1, open)
 				if acIndex < 0:
 					ac = aStarCell(newX, cc.y + 1, cc.x, cc.y)
@@ -728,7 +763,7 @@ class FightController:
 						ac.f = ac.g + ac.h
 			# To down-right
 			newX = cc.x + 1 if cc.y % 2 else cc.x
-			if cc.y + 1 < sizeY and map[cc.y + 1][newX] != 0 and self.exist(newX, cc.y + 1, close) < 0:
+			if cc.y + 1 < sizeY and newX < len(map[cc.y + 1]) and map[cc.y + 1][newX] != 0 and self.exist(newX, cc.y + 1, close) < 0:
 				acIndex = self.exist(newX, cc.y + 1, open)
 				if acIndex < 0:
 					ac = aStarCell(newX, cc.y + 1, cc.x, cc.y)

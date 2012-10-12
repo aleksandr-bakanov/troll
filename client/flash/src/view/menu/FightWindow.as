@@ -80,10 +80,58 @@ package view.menu
 			Dispatcher.instance.addEventListener(UserEvent.CHANGE_CELL, changeCell);
 			Dispatcher.instance.addEventListener(UserEvent.TELEPORT_UNIT, teleportUnit);
 			Dispatcher.instance.addEventListener(UserEvent.YOUR_MOVE, yourMove);
+			Dispatcher.instance.addEventListener(UserEvent.FINISH_FIGHT, finishFight);
 			
 			module.enter.addEventListener(MouseEvent.CLICK, enterHandler);
 			module.change.addEventListener(MouseEvent.CLICK, changeHandler);
 			module.attack.addEventListener(MouseEvent.CLICK, attackHandler);
+		}
+		
+		private function finishFight(e:UserEvent):void 
+		{
+			// Здесь нужно почистить все
+			// Останавливаем таймер хода
+			_moveTimer.stop();
+			module.time.text = "-";
+			// Удаляем юнитов с поля
+			var id:String;
+			for (id in _units)
+			{
+				var unit:Unit = _units[id] as Unit;
+				if (unit && unit.parent)
+					unit.parent.removeChild(unit);
+			}
+			// Удаляем клетки поля
+			for (id in _cells)
+			{
+				var floor:Array = _cells[id] as Array;
+				for (var y:int = 0; y < floor.length; y++)
+				{
+					var column:Array = floor[y] as Array;
+					for (var x:int = 0; x < column.length; x++)
+					{
+						var cell:Cell_asset = floor[y][x] as Cell_asset;
+						if (cell)
+						{
+							cell.removeEventListener(MouseEvent.CLICK, cellClickHandler);
+							cell.info = null;
+							if (cell.parent)
+								cell.parent.removeChild(cell);
+						}
+						floor[y][x] = null;
+					}
+					floor[y] = null;
+				}
+				_cells[id] = null;
+			}
+			// Удаляем сами спрайты этажей (возможно это не понадобится поздней)
+			for (id in _floors)
+			{
+				var floorView:Sprite = _floors[id];
+				if (floorView)
+					module.map.removeChild(floorView);
+				_floors[id] = null;
+			}
 		}
 		
 		private function attackHandler(e:MouseEvent):void 
@@ -169,7 +217,7 @@ package view.menu
 				if (id == String(_model.fInfo.selfId))
 				{
 					module.map.addChild(floor);
-					ourFloor = parseInt(id);
+					ourFloor = o.floorId;
 				}
 				else
 				{
@@ -200,7 +248,9 @@ package view.menu
 		private function showFloor(floorId:int):void
 		{
 			for (var id:String in _floors)
+			{
 				(_floors[id] as DisplayObject).visible = id == String(floorId);
+			}
 		}
 		
 		private function areaOpen(e:UserEvent):void 

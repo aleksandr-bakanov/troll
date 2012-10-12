@@ -35,9 +35,9 @@ class Bid:
 			self.players[id] = player
 		self.curcount += 1
 		player.bidId = self.id
-		if self.curcount == self.count:
-			self.t.cancel()
-			self.cb(self.id)
+		#if self.curcount == self.count:
+		#	self.t.cancel()
+		#	self.cb(self.id)
 
 	def removePlayer(self, player):
 		id = 0

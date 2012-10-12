@@ -65,6 +65,12 @@ class BidsController:
 			if b: # and math.fabs(player.params["usedOP"] - b.op) <= 5:
 				b.addPlayer(player)
 				self.sayUpdateBid(id)
+				if b.curcount == b.count:
+					b.t.cancel()
+					# Возможно это станет проблемным местом.
+					self.lock.release()
+					self.checkBidForStart(b.id)
+					return
 		self.lock.release()
 
 	# Удаление игрока из списка игроков в заявке

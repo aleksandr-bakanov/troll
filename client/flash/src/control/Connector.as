@@ -46,6 +46,7 @@ package control
 		public static const S_UNIT_ACTION:int = 47;
 		public static const S_CHANGE_CELL:int = 49;
 		public static const S_TELEPORT_UNIT:int = 51;
+		public static const S_KILL_UNIT:int = 53;
 
 		// Client side
 		public static const C_LOGIN:int = 2;
@@ -193,6 +194,8 @@ package control
 				case S_TELEPORT_UNIT: sTeleportUnit(); break;
 				case S_YOUR_MOVE: sYourMove(); break;
 				case S_UNIT_DAMAGE: sUnitDamage(); break;
+				case S_KILL_UNIT: sKillUnit(); break;
+				case S_FINISH_FIGHT: sFinishFight(); break;
 				default: break;
 			}
 			_lastComSize = 0;
@@ -339,6 +342,7 @@ package control
 		
 		private function sAreaOpen():void 
 		{
+			Debug.out("sAreaOpen");
 			var cells:Object = { };
 			var floorsCount:int = _socket.readByte();
 			for (var i:int = 0; i < floorsCount; i++)
@@ -463,7 +467,19 @@ package control
 				var y:int = _socket.readShort();
 			}
 			var damage:int = _socket.readByte();
-			Debug.out("unitId = " + unitId + "; damage = " + damage);
+			Debug.out("Unit damage: unitId = " + unitId + "; damage = " + damage);
+		}
+		
+		private function sKillUnit():void 
+		{
+			var unitId:int = _socket.readByte();
+			Debug.out("Kill unit: unitId = " + unitId);
+		}
+		
+		private function sFinishFight():void 
+		{
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.FINISH_FIGHT));
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.SHOW_WINDOW, MainView.MAIN_WINDOW));
 		}
 
 
