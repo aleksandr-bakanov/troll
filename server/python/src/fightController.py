@@ -69,6 +69,8 @@ class FightController:
 				p.fInfo["id"] = i
 				# Создадим ссылку на текущее оружие
 				p.fInfo["curWeapon"] = p.params["handWeapon"]
+				# В начале боя у всех полные жизни
+				p.params["hitPoints"] = p.params["health"]
 				i += 1
 		# Список для отдельного хранения дверей
 		self.doors = []
@@ -108,6 +110,8 @@ class FightController:
 		for p in self.players:
 			if p:
 				p.sYourMove(self.moveOrder[self.currentUnit], SECONDS_TO_MOVE)
+				if p.fInfo["id"] == self.players[self.moveOrder[self.currentUnit]].fInfo["id"]:
+					p.params["actPoints"] = int(p.params["speed"])
 		# Затем запускаем таймер ожидания
 		self.nextMoveTimer = threading.Timer(SECONDS_TO_MOVE + 1, self.nextMove)
 		self.nextMoveTimer.start()
@@ -122,6 +126,10 @@ class FightController:
 			if p:
 				data += pack('<bbhh', playerId, p.fInfo["floor"], p.fInfo["x"], p.fInfo["y"])
 				comSize += 6
+				mes = unicode(p.name, 'utf-8')
+				mesLen = len(mes.encode('utf-8'))
+				data += pack('<h' + str(mesLen) + 's', mesLen, mes.encode('utf-8'))
+				comSize += mesLen + SHORT_SIZE;
 			else:
 				data += pack('<b', -1)
 				comSize += 1
@@ -394,7 +402,7 @@ class FightController:
 
 	def unitWantAction(self, player, x, y):
 		# Проверка дозволенности хода
-		if player.params["hitPoints"] <= 0 or player.fInfo["id"] != self.moveOrder[self.currentUnit]:
+		if player.params["hitPoints"] <= 0 or player.fInfo["id"] != self.moveOrder[self.currentUnit] or player.params["actPoints"] < ACTION_COST:
 			return
 		# Взаимодействовать с ячейкой можно только находясь в непосредственной близости от нее
 		floorId = player.fInfo["floor"]
@@ -467,6 +475,9 @@ class FightController:
 			self.sendOpenedArea(result)
 			#self.sendOpenedKeys(result)
 			self.teleportUnit(player, cell.toFloor, cell.toX, cell.toY)
+		player.params["actPoints"] -= ACTION_COST
+		if player.params["actPoints"] == 0:
+			self.nextMove()
 
 	def teleportUnit(self, unit, floor, x, y):
 		unit.fInfo["floor"] = floor
@@ -513,12 +524,16 @@ class FightController:
 
 	def unitWantAttack(self, player, x, y):
 		# Проверка дозволенности хода
-		if player.params["hitPoints"] <= 0 or player.fInfo["id"] != self.moveOrder[self.currentUnit]:
+		od = player.fInfo["curWeapon"]["points"] if player.fInfo["curWeapon"] else 1
+		if player.params["hitPoints"] <= 0 or player.fInfo["id"] != self.moveOrder[self.currentUnit] or player.params["actPoints"] < od:
 			return
 		# Проверка на неверные координаты
 		floor = player.fInfo["floor"]
 		if y < 0 or y >= len(self.map[floor]) or x < 0 or x >= len(self.map[floor][y]):
 			return
+		# TODO: добавить сюда проверку возможности попадания по этой ячейке
+		# то есть расстояние до нее и не загорожена ли она препятствием.
+
 		unit = self.getUnitByCoordinates(floor, x, y)
 		damage = 0
 		if player.fInfo["curWeapon"]:
@@ -527,11 +542,13 @@ class FightController:
 			damage = self.getDamage("1k")
 		if unit:
 			# Атакуем юнита
+			player.params["actPoints"] -= od
 			# TODO: добавить сюда сопротивление цели
 			if unit.params["hitPoints"] > 0:
 				unit.params["hitPoints"] -= damage
 				for p in self.players:
 					if p:
+						p.sUnitAttack(player.fInfo["id"], x, y)
 						p.sUnitDamage(damage, unit.fInfo["id"])
 				# Если юнит умер, сообщаем об этом. Кроме того нужно исключить его
 				# из списка moveOrder, чтобы ему не передавался ход.
@@ -550,15 +567,42 @@ class FightController:
 									self.currentUnit -= 1
 								self.moveOrder.remove(unit.fInfo["id"])
 
-
 		elif self.map[floor][y][x].type == CT_WALL:
 			cell = self.map[floor][y][x]
 			if cell.hp > 0:
+				player.params["actPoints"] -= od
 				# Атакуем стену
 				cell.hp -= damage
+				for p in self.players:
+					if p:
+						p.sUnitAttack(player.fInfo["id"], x, y)
+						p.sUnitDamage(damage, -1, floor, x, y)
 				if cell.hp <= 0:
 					cell.hp = 0
 					self.changeCellType(cell, CT_FLOOR)
+					# Тут стена рушится, поэтому нужно узнать не увидят ли игроки чего нового.
+					for p in self.players:
+						if p:
+							# Находим ячейки, которые видно этому игроку
+							floorId = p.fInfo["floor"]
+							floorHeight = len(self.map[floorId])
+							floorWidth = len(self.map[floorId][0])
+							area = self.getCellsInRadius(floorId, floorWidth, floorHeight, p.fInfo["x"], p.fInfo["y"], 0, VIEW_RADIUS, True, True)
+							inKnownArea = set(self.knownArea[floorId])
+							inArea = set(area)
+							newArea = inArea - inKnownArea
+							self.knownArea[floorId] = self.knownArea[floorId] + list(newArea)
+							# Подготовим массив для функции sendOpenedArea
+							result = []
+							# Создаем этажи (пустые массивы этажей будут проигнорированы)
+							for floor in self.map:
+								result.append([])
+							result[floorId] = list(newArea)
+							# Игрокам нужно отправить newArea
+							self.sendOpenedArea(result)
+		# Атака проведена, отнимаем очки действия
+		if player.params["actPoints"] == 0:
+			self.nextMove()
 
 
 	def getDamage(self, damageStr):
@@ -596,8 +640,10 @@ class FightController:
 		if x < 0 or y < 0 or self.map[floor][y][x].type != CT_FLOOR:
 			return
 		path = self.aStar(floor, px, py, x, y, [])
-		# TODO: Проверить хватает ли у игрока ОД, для прохода по такому пути
+		if player.params["actPoints"] < len(path) / 2:
+			return
 		if len(path) > 0:
+			player.params["actPoints"] -= len(path) / 2
 			# Теперь на каждом шаге игрока нужно проверять открытую им территорию.
 			# Видимо будем слать шаг-[ячейки]-шаг-[ячейки].
 			# Ячейки (территория) опциональны, т.к. игрок может ходить
@@ -625,6 +671,8 @@ class FightController:
 				self.sendOpenedArea(result)
 				#self.sendOpenedKeys(result)
 				self.moveUnit(player, step, step[0], step[1])
+		if player.params["actPoints"] == 0:
+			self.nextMove()
 
 	def moveUnit(self, unit, path, x, y):
 		unit.fInfo["x"] = x
@@ -712,7 +760,7 @@ class FightController:
 			# To up-left
 			# Здесь нужно уточнить координату X, т.к. она зависит от координаты Y.
 			newX = cc.x if cc.y % 2 else cc.x - 1
-			if cc.y - 1 >= 0 and newX < len(map[cc.y - 1]) and map[cc.y - 1][newX] != 0 and self.exist(newX, cc.y - 1, close) < 0:
+			if cc.y - 1 >= 0 and newX < len(map[cc.y - 1]) and newX >= 0 and map[cc.y - 1][newX] != 0 and self.exist(newX, cc.y - 1, close) < 0:
 				acIndex = self.exist(newX, cc.y - 1, open)
 				if acIndex < 0:
 					ac = aStarCell(newX, cc.y - 1, cc.x, cc.y)
@@ -729,7 +777,7 @@ class FightController:
 						ac.f = ac.g + ac.h
 			# To up-right
 			newX = cc.x + 1 if cc.y % 2 else cc.x
-			if cc.y - 1 >= 0 and newX < len(map[cc.y - 1]) and map[cc.y - 1][newX] != 0 and self.exist(newX, cc.y - 1, close) < 0:
+			if cc.y - 1 >= 0 and newX < len(map[cc.y - 1]) and newX >= 0 and map[cc.y - 1][newX] != 0 and self.exist(newX, cc.y - 1, close) < 0:
 				acIndex = self.exist(newX, cc.y - 1, open)
 				if acIndex < 0:
 					ac = aStarCell(newX, cc.y - 1, cc.x, cc.y)
@@ -746,7 +794,7 @@ class FightController:
 						ac.f = ac.g + ac.h
 			# To down-left
 			newX = cc.x if cc.y % 2 else cc.x - 1
-			if cc.y + 1 < sizeY and newX < len(map[cc.y + 1]) and map[cc.y + 1][newX] != 0 and self.exist(newX, cc.y + 1, close) < 0:
+			if cc.y + 1 < sizeY and newX < len(map[cc.y + 1]) and newX >= 0 and map[cc.y + 1][newX] != 0 and self.exist(newX, cc.y + 1, close) < 0:
 				acIndex = self.exist(newX, cc.y + 1, open)
 				if acIndex < 0:
 					ac = aStarCell(newX, cc.y + 1, cc.x, cc.y)
@@ -763,7 +811,7 @@ class FightController:
 						ac.f = ac.g + ac.h
 			# To down-right
 			newX = cc.x + 1 if cc.y % 2 else cc.x
-			if cc.y + 1 < sizeY and newX < len(map[cc.y + 1]) and map[cc.y + 1][newX] != 0 and self.exist(newX, cc.y + 1, close) < 0:
+			if cc.y + 1 < sizeY and newX < len(map[cc.y + 1]) and newX >= 0 and map[cc.y + 1][newX] != 0 and self.exist(newX, cc.y + 1, close) < 0:
 				acIndex = self.exist(newX, cc.y + 1, open)
 				if acIndex < 0:
 					ac = aStarCell(newX, cc.y + 1, cc.x, cc.y)

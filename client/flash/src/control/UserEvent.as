@@ -45,6 +45,9 @@ package control
 		public static const YOUR_MOVE:String = "your_move";
 		public static const CHANGE_WEAPON:String = "change_weapon";
 		public static const FINISH_FIGHT:String = "finish_fight";
+		public static const UNIT_DAMAGE:String = "unit_damage";
+		public static const UNIT_ATTACK:String = "unit_attack";
+		public static const KILL_UNIT:String = "kill_unit";
 		
 		public var data:Object;
 		

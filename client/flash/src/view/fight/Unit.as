@@ -1,6 +1,7 @@
 package view.fight 
 {
 	import com.greensock.TweenLite;
+	import flash.display.Graphics;
 	import flash.display.Sprite;
 	import flash.geom.Point;
 	import view.common.Debug;
@@ -17,10 +18,21 @@ package view.fight
 		public var isMoving:Boolean = false;
 		private var _tweenLite:TweenLite;
 		
-		public function Unit() 
+		public function Unit(name:String = "noname") 
 		{
 			module = new Player_asset();
+			module.nameField.text = name;
+			mouseChildren = mouseEnabled = false;
 			addChild(module);
+		}
+		
+		public function kill():void
+		{
+			stopMove();
+			var g:Graphics = this.graphics;
+			g.beginFill(0xFF0000);
+			g.drawCircle(0, 0, 20);
+			g.endFill();
 		}
 		
 		public function move(path:Array):void
@@ -35,7 +47,8 @@ package view.fight
 		
 		public function stopMove():void
 		{
-			_tweenLite.kill();
+			if (_tweenLite)
+				_tweenLite.kill();
 			path = [];
 			isMoving = false;
 		}
@@ -48,7 +61,7 @@ package view.fight
 				return;
 			}
 			var point:Point = path.shift() as Point;
-			_tweenLite = TweenLite.to(this, FightWindow.STEP_DURATION, { x:point.x * FightWindow.CELL_WIDTH + (point.y % 2 ? FightWindow.CELL_WIDTH / 2 : 0), y:point.y * FightWindow.CELL_HEIGHT * 0.75,
+			_tweenLite = TweenLite.to(this, FightWindow.UNIT_STEP_DURATION, { x:point.x * FightWindow.CELL_WIDTH + (point.y % 2 ? FightWindow.CELL_WIDTH / 2 : 0), y:point.y * FightWindow.CELL_HEIGHT * 0.75,
 				onComplete:goNextStep } );
 		}
 		

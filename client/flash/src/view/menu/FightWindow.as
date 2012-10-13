@@ -9,9 +9,14 @@ package view.menu
 	import flash.display.MovieClip;
 	import flash.display.Shape;
 	import flash.display.Sprite;
+	import flash.events.KeyboardEvent;
 	import flash.events.MouseEvent;
 	import flash.events.TimerEvent;
 	import flash.geom.Point;
+	import flash.text.TextField;
+	import flash.text.TextFormat;
+	import flash.text.TextFormatAlign;
+	import flash.ui.Keyboard;
 	import flash.utils.Dictionary;
 	import flash.utils.Timer;
 	import model.MainModel;
@@ -44,7 +49,10 @@ package view.menu
 		public static const ACT_ATTACK:int = 2;
 		public static const ACT_CHANGE_WEAPON:int = 3;
 		// TweenLite константы
-		public static const STEP_DURATION:Number = 0.5;
+		public static const UNIT_STEP_DURATION:Number = 0.5;
+		public static const DAMAGE_TEXT_FORMAT:TextFormat = new TextFormat("_sans", 14, 0xBB0000, true, false, false, null, null, TextFormatAlign.CENTER);
+		public static const DAMAGE_FLY_DURATION:Number = 2.0;
+		public static const ZERO_POINT:Point = new Point();
 		
 		public var module:FightWindow_asset;
 		private var _model:MainModel;
@@ -60,6 +68,14 @@ package view.menu
 		// Таймер хода
 		private var _moveTimer:Timer = new Timer(1000);
 		private var _secondsLeft:int;
+		// Очередь анимаций. Сюда будут складываться последовательные анимации
+		// приходящие с сервера. Например, анимацию повреждения нужно проиграть
+		// после анимации атаки.
+		private var _animationQueue:Array = [];
+		private var _isAnimationPlaying:Boolean = false;
+		// Интерфейс
+		public static const HP_WIDTH:int = 118;
+		public static const HP_HEIGHT:int = 18;
 		
 		public function FightWindow(model:MainModel) 
 		{
@@ -77,19 +93,25 @@ package view.menu
 			Dispatcher.instance.addEventListener(UserEvent.KEYS_OPEN, keysOpen);
 			Dispatcher.instance.addEventListener(UserEvent.S_CHAT_MESSAGE, sChatMessage);
 			Dispatcher.instance.addEventListener(UserEvent.MOVE_UNIT, moveUnit);
-			Dispatcher.instance.addEventListener(UserEvent.CHANGE_CELL, changeCell);
+			Dispatcher.instance.addEventListener(UserEvent.CHANGE_CELL, addAnimation);
 			Dispatcher.instance.addEventListener(UserEvent.TELEPORT_UNIT, teleportUnit);
 			Dispatcher.instance.addEventListener(UserEvent.YOUR_MOVE, yourMove);
 			Dispatcher.instance.addEventListener(UserEvent.FINISH_FIGHT, finishFight);
+			Dispatcher.instance.addEventListener(UserEvent.UNIT_DAMAGE, addAnimation);
+			Dispatcher.instance.addEventListener(UserEvent.UNIT_ATTACK, addAnimation);
+			Dispatcher.instance.addEventListener(UserEvent.KILL_UNIT, addAnimation);
 			
 			module.enter.addEventListener(MouseEvent.CLICK, enterHandler);
 			module.change.addEventListener(MouseEvent.CLICK, changeHandler);
 			module.attack.addEventListener(MouseEvent.CLICK, attackHandler);
+			/// TODO: Добавить горячие клавиши для атаки, смены оружия и отправки сообщения.
+			/// TODO: Сделать пульки, умирание.
 		}
 		
 		private function finishFight(e:UserEvent):void 
 		{
 			// Здесь нужно почистить все
+			stage.removeEventListener(KeyboardEvent.KEY_DOWN, hotKeysHandler);
 			// Останавливаем таймер хода
 			_moveTimer.stop();
 			module.time.text = "-";
@@ -132,9 +154,90 @@ package view.menu
 					module.map.removeChild(floorView);
 				_floors[id] = null;
 			}
+			// Чистим очередь анимаций (может и не нужно)
+			_animationQueue.length = 0;
+			_isAnimationPlaying = false;
 		}
 		
-		private function attackHandler(e:MouseEvent):void 
+		private function updateHealth():void
+		{
+			var percent:Number = _model.params.hitPoints / _model.params.health;
+			var g:Graphics = module.hp.graphics;
+			g.clear();
+			g.beginFill(0xFF0000);
+			g.drawRect(1, 1, HP_WIDTH * percent, HP_HEIGHT);
+			g.endFill();
+		}
+		
+		/**
+		 * Функция добавления анимации в очередь анимаций.
+		 * @param	e
+		 */
+		private function addAnimation(e:UserEvent):void
+		{
+			_animationQueue.push(e);
+			if (!_isAnimationPlaying)
+				playNextAnimation();
+		}
+		
+		private function playNextAnimation():void
+		{
+			if (_animationQueue.length == 0)
+			{
+				_isAnimationPlaying = false;
+				return;
+			}
+			_isAnimationPlaying = true;
+			var e:UserEvent = _animationQueue.shift() as UserEvent;
+			if (e.type == UserEvent.UNIT_ATTACK) unitAttack(e);
+			else if (e.type == UserEvent.UNIT_DAMAGE) unitDamage(e);
+			else if (e.type == UserEvent.KILL_UNIT) killUnit(e);
+			else if (e.type == UserEvent.CHANGE_CELL) changeCell(e);
+		}
+		
+		private function unitAttack(e:UserEvent):void
+		{
+			var bullet:Sprite = new Sprite();
+			bullet.graphics.lineStyle(1);
+			bullet.graphics.beginFill(0x555555);
+			bullet.graphics.drawCircle(0, 0, 5);
+			bullet.graphics.endFill();
+			var unit:Unit = _units[e.data.unitId] as Unit;
+			if (!unit)
+			{
+				playNextAnimation();
+				return;
+			}
+			if (_model.fInfo.selfId == e.data.unitId)
+			{
+				var od:int = _model.params.curWeapon ? _model.params.curWeapon.points : 1;
+				_model.params.actPoints -= od;
+				updateActionPoints();
+			}
+			var floor:int = _model.fInfo.players[e.data.unitId].floorId;
+			var up:Point = unit.localToGlobal(ZERO_POINT);
+			var cell:Cell_asset = _cells[floor][e.data.y][e.data.x] as Cell_asset;
+			if (!cell)
+			{
+				playNextAnimation();
+				return;
+			}
+			var cp:Point = cell.localToGlobal(ZERO_POINT);
+			bullet.x = up.x;
+			bullet.y = up.y;
+			stage.addChild(bullet);
+			TweenLite.to(bullet, DAMAGE_FLY_DURATION, { x:cp.x, y:cp.y, onComplete:removeFromParent, onCompleteParams:[bullet, true] } );
+		}
+		
+		private function killUnit(e:UserEvent):void
+		{
+			var unit:Unit = _units[e.data.unitId] as Unit;
+			if (unit)
+				unit.kill();
+			playNextAnimation();
+		}
+		
+		private function attackHandler(e:MouseEvent = null):void 
 		{
 			var range:int = _model.params.handWeapon ? _model.params.handWeapon.range : 1;
 			var o:Object = _model.fInfo.players[_model.fInfo.selfId];
@@ -146,10 +249,60 @@ package view.menu
 			var height:int = _cells[floor].length;
 			var xc:int = o.x;
 			var yc:int = o.y;
-			glowRadius(_model.fInfo.floor, width, height, xc, yc, 0, 2/*range*/, true);
+			glowRadius(_model.fInfo.floor, width, height, xc, yc, 0, range, true);
 		}
 		
-		private function changeHandler(e:MouseEvent):void 
+		private function unitDamage(e:UserEvent):void 
+		{
+			var unitId:int = e.data.unitId as int;
+			if (unitId >= 0)
+			{
+				if (unitId == _model.fInfo.selfId)
+				{
+					_model.params.hitPoints -= e.data.damage;
+					if (_model.params.hitPoints < 0)
+						_model.params.hitPoints = 0
+					updateHealth();
+				}
+				var unit:Unit = _units[unitId] as Unit;
+				if (unit)
+					playDamage(unit, e.data.damage);
+			}
+			else
+			{
+				var cell:Cell_asset = _cells[e.data.floor][e.data.y][e.data.x] as Cell_asset;
+				if (cell)
+					playDamage(cell, e.data.damage);
+			}
+			playNextAnimation();
+		}
+		
+		private function playDamage(object:DisplayObjectContainer, damage:int):void
+		{
+			var tf:TextField = new TextField();
+			tf.selectable = false;
+			tf.defaultTextFormat = DAMAGE_TEXT_FORMAT;
+			tf.text = String(damage);
+			tf.background = tf.border = false;
+			tf.width = 50;
+			tf.height = tf.textHeight + 5;
+			var p:Point = object.localToGlobal(ZERO_POINT);
+			tf.x = p.x - tf.width / 2;
+			tf.y = p.y - tf.height / 2;
+			// Возможно это слишком
+			stage.addChild(tf);
+			TweenLite.to(tf, DAMAGE_FLY_DURATION, { y: tf.y - 30, onComplete:removeFromParent, onCompleteParams:[tf] } );
+		}
+		
+		private function removeFromParent(object:DisplayObject, startNextAnimation:Boolean = false):void
+		{
+			if (object && object.parent)
+				object.parent.removeChild(object);
+			if (startNextAnimation)
+				playNextAnimation();
+		}
+		
+		private function changeHandler(e:MouseEvent = null):void 
 		{
 			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.CHANGE_WEAPON));
 			/// TODO: Вдальнейшем, возможно, нужно будет поменять принцип хранения информации о текущем оружии.
@@ -170,6 +323,30 @@ package view.menu
 			{
 				_secondsLeft = e.data.seconds;
 				_moveTimer.start();
+				_model.params.actPoints = int(_model.params.speed);
+				updateActionPoints();
+			}
+			else
+			{
+				_model.params.actPoints = 0;
+				updateActionPoints();
+				_moveTimer.stop();
+				module.time.text = "-";
+			}
+		}
+		
+		private function updateActionPoints():void
+		{
+			var margin:int = 1;
+			var totalPoints:int = int(_model.params.speed);
+			var elementWidth:Number = HP_WIDTH / totalPoints - margin;
+			var g:Graphics = module.od.graphics;
+			g.clear();
+			for (var i:int = 0; i < _model.params.actPoints; i++)
+			{
+				g.beginFill(0x0000E0);
+				g.drawRect(1 + i * (elementWidth + margin), 1, elementWidth, HP_HEIGHT);
+				g.endFill();
 			}
 		}
 		
@@ -185,7 +362,7 @@ package view.menu
 			_secondsLeft--;
 		}
 		
-		private function enterHandler(e:MouseEvent):void 
+		private function enterHandler(e:MouseEvent = null):void 
 		{
 			if (module.input.text.length)
 			{
@@ -201,8 +378,21 @@ package view.menu
 			module.output.scrollV = module.output.maxScrollV;
 		}
 		
+		private function hotKeysHandler(e:KeyboardEvent):void
+		{
+			if (e.keyCode == Keyboard.ENTER)
+				enterHandler();
+			else if (e.keyCode == Keyboard.A)
+				attackHandler();
+			else if (e.keyCode == Keyboard.S)
+				changeHandler();
+		}
+		
 		private function startFight(e:UserEvent):void 
 		{
+			stage.addEventListener(KeyboardEvent.KEY_DOWN, hotKeysHandler);
+			_model.params.hitPoints = _model.params.health;
+			updateHealth();
 			var ourFloor:int;
 			// Размещаем игроков
 			for (var id:String in _model.fInfo.players)
@@ -223,7 +413,7 @@ package view.menu
 				{
 					module.map.addChildAt(floor, 0);
 				}
-				var player:Unit = new Unit();
+				var player:Unit = new Unit(o.name);
 				player.x = o.x * CELL_WIDTH + (o.y % 2 ? CELL_WIDTH / 2 : 0);
 				player.y = o.y * CELL_HEIGHT * 0.75;
 				floor.addChild(player);
@@ -370,6 +560,7 @@ package view.menu
 				cell.gotoAndStop("wall");
 				cell.previousState = "wall";
 			}
+			playNextAnimation();
 		}
 		
 		private function cellClickHandler(e:MouseEvent):void 
@@ -401,6 +592,11 @@ package view.menu
 			var path:Array = e.data.path as Array;
 			o.x = path[path.length - 1].x;
 			o.y = path[path.length - 1].y;
+			if (_model.fInfo.selfId == e.data.id)
+			{
+				_model.params.actPoints -= path.length;
+				updateActionPoints();
+			}
 			unit.move(path);
 		}
 		

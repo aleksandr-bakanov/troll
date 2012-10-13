@@ -93,6 +93,7 @@
 			player_floor_id [1]
 			player_x [2]
 			player_y [2]
+			player_name [string]
 		move_order [players_count] - последовательность id игроков.
 		your_id [1] - id игрока, которому отправляется команда.
 	Если очередной player_id == -1, то про этого игрока ничего

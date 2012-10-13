@@ -196,6 +196,7 @@ package control
 				case S_UNIT_DAMAGE: sUnitDamage(); break;
 				case S_KILL_UNIT: sKillUnit(); break;
 				case S_FINISH_FIGHT: sFinishFight(); break;
+				case S_UNIT_ATTACK: sUnitAttack(); break;
 				default: break;
 			}
 			_lastComSize = 0;
@@ -329,6 +330,7 @@ package control
 					o.floorId = _socket.readByte();
 					o.x = _socket.readShort();
 					o.y = _socket.readShort();
+					o.name = _socket.readUTF();
 					_model.fInfo.players[id] = o;
 				}
 			}
@@ -342,7 +344,6 @@ package control
 		
 		private function sAreaOpen():void 
 		{
-			Debug.out("sAreaOpen");
 			var cells:Object = { };
 			var floorsCount:int = _socket.readByte();
 			for (var i:int = 0; i < floorsCount; i++)
@@ -467,19 +468,30 @@ package control
 				var y:int = _socket.readShort();
 			}
 			var damage:int = _socket.readByte();
-			Debug.out("Unit damage: unitId = " + unitId + "; damage = " + damage);
+			if (unitId >= 0)
+				Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.UNIT_DAMAGE, { unitId:unitId, damage:damage } ));
+			else
+				Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.UNIT_DAMAGE, { unitId:unitId, floor:floor, x:x, y:y, damage:damage } ));
 		}
 		
 		private function sKillUnit():void 
 		{
 			var unitId:int = _socket.readByte();
-			Debug.out("Kill unit: unitId = " + unitId);
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.KILL_UNIT, { unitId:unitId } ));
 		}
 		
 		private function sFinishFight():void 
 		{
 			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.FINISH_FIGHT));
 			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.SHOW_WINDOW, MainView.MAIN_WINDOW));
+		}
+		
+		private function sUnitAttack():void 
+		{
+			var unitId:int = _socket.readByte();
+			var x:int = _socket.readShort();
+			var y:int = _socket.readShort();
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.UNIT_ATTACK, { unitId:unitId, x:x, y:y } ));
 		}
 
 

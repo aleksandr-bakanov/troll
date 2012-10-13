@@ -259,7 +259,7 @@ class Player:
 		if unitId >= 0:
 			data = pack('<ihbb', 4, S_UNIT_DAMAGE, unitId, damage)
 		else:
-			data = pack('<ihbhh', 8, S_UNIT_DAMAGE, floor, x, y, damage)
+			data = pack('<ihbbhhb', 9, S_UNIT_DAMAGE, unitId, floor, x, y, damage)
 		self.sendData(data)
 
 	def sKillUnit(self, unitId):
@@ -268,6 +268,10 @@ class Player:
 
 	def sFinishFight(self):
 		data = pack('<ih', 2, S_FINISH_FIGHT)
+		self.sendData(data)
+
+	def sUnitAttack(self, unitId, x, y):
+		data = pack('<ihbhh', 7, S_UNIT_ATTACK, unitId, x, y)
 		self.sendData(data)
 		
 	
@@ -415,7 +419,7 @@ class Player:
 	# Функция выполняет запрос клиента на вступление в заявку.
 	def cEnterBid(self, data):
 		id = getShort(data, 0)
-		if self.bidId == -1 and self.params["hitPoints"] > 0:
+		if self.bidId == -1:
 			self.bidsController.addPlayerToBid(id, self)
 		return SHORT_SIZE
 
@@ -425,12 +429,11 @@ class Player:
 		return 0
 
 	# Функция обрабатывает запрос клиента на создание заявки.
-	# Пока сделано так, что количество игроков в заявке лежит в пределах
-	# [1;6]
+	# Пока сделано так, что количество игроков в заявке лежит в пределах [1;6]
 	def cCreateBid(self, data):
 		count = getChar(data, 0)
 		name = getUTF(data, 1)
-		if self.bidId == -1 and count >= 1 and count <= 6 and self.params["hitPoints"] > 0:
+		if self.bidId == -1 and count >= 1 and count <= 6:
 			self.bidsController.createBid(self, self.params["usedOP"], count, name)
 		return CHAR_SIZE + SHORT_SIZE + len(name)
 
