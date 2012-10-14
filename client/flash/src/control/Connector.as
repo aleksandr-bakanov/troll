@@ -71,6 +71,8 @@ package control
 		private var _model:MainModel;
 		private var _host:String;
 		private var _port:int;
+		private var _login:String;
+		private var _password:String;
 
 		public function Connector(model:MainModel, host:String, port:int) 
 		{
@@ -80,6 +82,12 @@ package control
 			_lastComSize = 0;
 			configureHandlers();
 			configureSocket();
+		}
+		
+		public function setLoginPassword(login:String, password:String):void
+		{
+			_login = login;
+			_password = password;
 		}
 
 		private function configureHandlers():void 
@@ -115,8 +123,8 @@ package control
 		
 		public function connect():void
 		{
-			_socket.connect("localhost", 15856);
-			//_socket.connect(_host, _port);
+			//_socket.connect("localhost", 15856);
+			_socket.connect(_host, _port);
 		}
 
 		private function socketDataHandler(e:ProgressEvent):void 
@@ -676,6 +684,16 @@ package control
 		private function connectHandler(e:Event):void 
 		{
 			Debug.out("Connection established.");
+			if (_login && _password)
+			{
+				var ba:ByteArray = new ByteArray();
+				ba.endian = Endian.LITTLE_ENDIAN;
+				ba.writeShort(C_LOGIN);
+				ba.writeUTF(_login);
+				ba.writeUTF(_password);
+				flushByteArray(ba);
+			}
+			
 		}
 		
 		//=============================================================

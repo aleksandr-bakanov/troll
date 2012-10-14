@@ -51,7 +51,7 @@ package view.menu
 		// TweenLite константы
 		public static const UNIT_STEP_DURATION:Number = 0.5;
 		public static const DAMAGE_TEXT_FORMAT:TextFormat = new TextFormat("_sans", 14, 0xBB0000, true, false, false, null, null, TextFormatAlign.CENTER);
-		public static const DAMAGE_FLY_DURATION:Number = 2.0;
+		public static const DAMAGE_FLY_DURATION:Number = 0.5;
 		public static const ZERO_POINT:Point = new Point();
 		
 		public var module:FightWindow_asset;

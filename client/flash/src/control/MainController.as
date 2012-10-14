@@ -21,6 +21,7 @@ package control
 			_mainModel = new MainModel();
 			_mainView = new MainView(_mainModel, host);
 			_connector = new Connector(_mainModel, host.stage.loaderInfo.parameters.host, host.stage.loaderInfo.parameters.port);
+			_connector.setLoginPassword(host.stage.loaderInfo.parameters.login, host.stage.loaderInfo.parameters.password);
 			configureHandlers();
 			_connector.connect();
 		}

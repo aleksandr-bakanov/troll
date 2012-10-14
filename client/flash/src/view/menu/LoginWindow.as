@@ -21,14 +21,8 @@ package view.menu
 			addChild(module);
 			/// TODO: После успешного коннекта этот слушатель уже не понадобится
 			module.goButton.addEventListener(MouseEvent.CLICK, goButtonClick);
-			module.registerButton.addEventListener(MouseEvent.CLICK, registerButtonClick);
 			module.password.displayAsPassword = true;
 			Dispatcher.instance.addEventListener(UserEvent.WRONG_LOGIN, wrongLoginHandler);
-		}
-		
-		private function registerButtonClick(e:MouseEvent):void 
-		{
-			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.SHOW_WINDOW, MainView.REGISTRATION_WINDOW));
 		}
 		
 		private function wrongLoginHandler(e:UserEvent):void 
