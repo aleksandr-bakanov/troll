@@ -277,19 +277,25 @@ class FightController:
 
 	def createMap(self):
 		map = [[],[]]
-		sizeX = 6
-		sizeY = 6
+		sizeX = 10
+		sizeY = 10
+		walls = [[2,2],[4,2],[6,2],[8,2],[1,4],[3,4],[5,4],[7,4],[2,6],[4,6],[6,6],[8,6],[1,8],[3,8],[5,8],[7,8]]
 		x = 0
 		y = 0
 		while y < sizeY:
 			map[0].append([])
 			while x < sizeX:
 				cell = Cell(0, x, y)
-				cell.hp = 1
-				if x == 0 or x == sizeX - 1 or y == 0 or y == sizeY - 1:
+				if x == 0 or x == sizeX - 1 or y == 0 or y == sizeY - 1 or [x,y] in walls:
 					cell.type = CT_WALL
+					if [x,y] in walls:
+						cell.hp = randint(1, 6)
 				else:
 					cell.type = CT_FLOOR
+					if x == 1 and y == 2:
+						cell.toFloor = 1
+						cell.toX = 8
+						cell.toY = 7
 				map[0][y].append(cell)
 				if cell.type == CT_DOOR:
 					self.doors.append(cell)
@@ -299,16 +305,23 @@ class FightController:
 		# Проба второго этажа
 		x = 0
 		y = 0
-		sizeX = 4
-		sizeY = 3
+		sizeX = 10
+		sizeY = 10
+		walls = [[2,1],[4,1],[6,1],[8,1],[1,3],[3,3],[5,3],[7,3],[2,5],[4,5],[6,5],[8,5],[1,7],[3,7],[5,7],[7,7]]
 		while y < sizeY:
 			map[1].append([])
 			while x < sizeX:
-				cell = Cell(0, x, y)
-				if x == 0 or x == sizeX - 1 or y == 0 or y == sizeY - 1:
+				cell = Cell(1, x, y)
+				if x == 0 or x == sizeX - 1 or y == 0 or y == sizeY - 1 or [x,y] in walls:
 					cell.type = CT_WALL
+					if [x,y] in walls:
+						cell.hp = randint(1, 6)
 				else:
 					cell.type = CT_FLOOR
+					if x == 8 and y == 8:
+						cell.toFloor = 0
+						cell.toX = 1
+						cell.toY = 1
 				map[1][y].append(cell)
 				if cell.type == CT_DOOR:
 					self.doors.append(cell)
@@ -600,7 +613,7 @@ class FightController:
 							result[floorId] = list(newArea)
 							# Игрокам нужно отправить newArea
 							self.sendOpenedArea(result)
-		# Атака проведена, отнимаем очки действия
+		# Атака проведена, проверяем очки действия
 		if player.params["actPoints"] == 0:
 			self.nextMove()
 

@@ -53,6 +53,8 @@ package view.menu
 		public static const DAMAGE_TEXT_FORMAT:TextFormat = new TextFormat("_sans", 14, 0xBB0000, true, false, false, null, null, TextFormatAlign.CENTER);
 		public static const DAMAGE_FLY_DURATION:Number = 0.5;
 		public static const ZERO_POINT:Point = new Point();
+		public static const SCROLL_MAP_STEP:uint = 100;
+		public static const ACTION_COST:uint = 1;
 		
 		public var module:FightWindow_asset;
 		private var _model:MainModel;
@@ -244,12 +246,12 @@ package view.menu
 			var floor:int = o.floorId;
 			var width:int = 0;
 			for (var i:int = 0; i < _cells[floor].length; i++)
-				if (width < _cells[floor][i].length)
+				if (_cells[floor][i] && width < _cells[floor][i].length)
 					width = _cells[floor][i].length;
 			var height:int = _cells[floor].length;
 			var xc:int = o.x;
 			var yc:int = o.y;
-			glowRadius(_model.fInfo.floor, width, height, xc, yc, 0, range, true);
+			glowRadius(floor, width, height, xc, yc, 0, range, true);
 		}
 		
 		private function unitDamage(e:UserEvent):void 
@@ -386,11 +388,27 @@ package view.menu
 				attackHandler();
 			else if (e.keyCode == Keyboard.S)
 				changeHandler();
+			else if (e.keyCode == Keyboard.UP || e.keyCode == Keyboard.DOWN || e.keyCode == Keyboard.LEFT || e.keyCode == Keyboard.RIGHT)
+				scrollMap(e.keyCode);
+		}
+		
+		private function scrollMap(keyCode:uint):void
+		{
+			var dur:Number = DAMAGE_FLY_DURATION / 2;
+			if (keyCode == Keyboard.UP)
+				TweenLite.to(module.map, dur, { y:module.map.y + SCROLL_MAP_STEP } );
+			else if (keyCode == Keyboard.DOWN)
+				TweenLite.to(module.map, dur, { y:module.map.y - SCROLL_MAP_STEP } );
+			else if (keyCode == Keyboard.LEFT)
+				TweenLite.to(module.map, dur, { x:module.map.x + SCROLL_MAP_STEP } );
+			else if (keyCode == Keyboard.RIGHT)
+				TweenLite.to(module.map, dur, { x:module.map.x - SCROLL_MAP_STEP } );
 		}
 		
 		private function startFight(e:UserEvent):void 
 		{
 			stage.addEventListener(KeyboardEvent.KEY_DOWN, hotKeysHandler);
+			module.output.text = module.input.text = "";
 			_model.params.hitPoints = _model.params.health;
 			updateHealth();
 			var ourFloor:int;
@@ -445,6 +463,7 @@ package view.menu
 		
 		private function areaOpen(e:UserEvent):void 
 		{
+			Debug.out("areaOpen");
 			for (var id:String in e.data)
 			{
 				// Создаем этаж если его еще не было.
@@ -454,8 +473,10 @@ package view.menu
 				}
 				var floor:Array = _cells[id] as Array;
 				// Проверяем создан ли floorView
+				Debug.out("  id = " + id);
 				if (!_floors[id])
 				{
+					Debug.out("  create floor (id) = " + id);
 					_floors[id] = createFloor();
 					var f:Sprite = _floors[id] as Sprite;
 					f.visible = _model.fInfo.players[_model.fInfo.selfId].floorId == parseInt(id);
@@ -577,11 +598,19 @@ package view.menu
 				if (cell.info.toFloor < 0 || isNaN(cell.info.toFloor))
 					Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.C_WANT_MOVE, new Point(cell.info.x, cell.info.y)));
 				else
+				{
+					_model.params.actPoints -= ACTION_COST;
+					updateActionPoints();
 					Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.C_ACTION, new Point(cell.info.x, cell.info.y)));
+				}
 			}
 			// Пока условимся, что кнопки могут быть расположены только на стенах
 			else if (cell.info.type == CT_WALL && cell.info.key >= 0)
+			{
+				_model.params.actPoints -= ACTION_COST;
+				updateActionPoints();
 				Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.C_ACTION, new Point(cell.info.x, cell.info.y)));
+			}
 		}
 		
 		private function moveUnit(e:UserEvent):void 
@@ -605,7 +634,9 @@ package view.menu
 			// На всякий случай удалим возможно подсвеченные клетки.
 			removeAllowedCellsGlowing();
 			var unit:Unit = _units[e.data.unitId] as Unit;
-			_model.fInfo.players[e.data.id].floorId = e.data.floor;
+			_model.fInfo.players[e.data.unitId].floorId = e.data.floor;
+			_model.fInfo.players[e.data.unitId].x = e.data.x;
+			_model.fInfo.players[e.data.unitId].y = e.data.y;
 			unit.stopMove();
 			var floor:Sprite = _floors[e.data.floor] as Sprite;
 			unit.x = e.data.x * CELL_WIDTH + (e.data.y % 2 ? CELL_WIDTH / 2 : 0);
@@ -637,7 +668,7 @@ package view.menu
 			var lenStart:int = r2 * 2 + 1;
 			var length:int = lenStart;
 			var countDiscard:int = r1 * 2 + 1;
-			var countAllow:int = length - countDiscard;
+			var countAllow:Number = length - countDiscard;
 			var xs:int = xc - r2;
 			var xe:int = xs + length - 1;
 			var xcur:int = xs;
@@ -650,33 +681,34 @@ package view.menu
 				// Начинаем с центральной полосы
 				for (var b:int = 0; b < length; b++)
 				{
-					//if (dy == 2 && xcur == 2)
-						//Debug.out( "("+Math.abs(xs - xcur)+" < "+(countAllow / 2)+") || ("+Math.abs(xe - xcur)+" < "+(countAllow / 2)+")" );
 					if ((Math.abs(xs - xcur) < (countAllow / 2)) || (Math.abs(xe - xcur) < (countAllow / 2)))
 					{
 						if (dy == 0)
 						{
 							ycur = yc;
-							if (xcur >= 0 && xcur < width)
-							{
-								cell = cells[ycur][xcur] as MovieClip;
-								array.push( { cell:cell, x:xcur, y:ycur } );
-							}
+							if (cells[ycur])
+								if (xcur >= 0 && xcur < cells[ycur].length)
+								{
+									cell = cells[ycur][xcur] as MovieClip;
+									array.push( { cell:cell, x:xcur, y:ycur } );
+								}
 						}
 						else
 						{
 							ycur = yc + dy;
-							if (xcur >= 0 && xcur < width && ycur >= 0 && ycur < height)
-							{
-								cell = cells[ycur][xcur] as MovieClip;
-								array.push( { cell:cell, x:xcur, y:ycur } );
-							}
+							if (cells[ycur])
+								if (xcur >= 0 && xcur < cells[ycur].length && ycur >= 0 && ycur < height)
+								{
+									cell = cells[ycur][xcur] as MovieClip;
+									array.push( { cell:cell, x:xcur, y:ycur } );
+								}
 							ycur = yc - dy;
-							if (xcur >= 0 && xcur < width && ycur >= 0 && ycur < height)
-							{
-								cell = cells[ycur][xcur] as MovieClip;
-								array.push( { cell:cell, x:xcur, y:ycur } );
-							}
+							if (cells[ycur])
+								if (xcur >= 0 && xcur < cells[ycur].length && ycur >= 0 && ycur < height)
+								{
+									cell = cells[ycur][xcur] as MovieClip;
+									array.push( { cell:cell, x:xcur, y:ycur } );
+								}
 						}
 					}
 					xcur++;
@@ -856,12 +888,15 @@ package view.menu
 			for (var i:int = 0; i < cells.length; i++)
 			{
 				var o:Object = cells[i];
-				// Сохраняем ячейку в массиве _glowedCells
-				var canGlow:Boolean = o.cell.info.type == CT_FLOOR || o.cell.info.type == CT_WALL;
-				if (canGlow)
+				if (o.cell)
 				{
-					_glowedCells.push(o.cell);
-					o.cell.gotoAndStop("red");
+					// Сохраняем ячейку в массиве _glowedCells
+					var canGlow:Boolean = o.cell.info.type == CT_FLOOR || o.cell.info.type == CT_WALL;
+					if (canGlow)
+					{
+						_glowedCells.push(o.cell);
+						o.cell.gotoAndStop("red");
+					}
 				}
 			}
 		}
