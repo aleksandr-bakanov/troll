@@ -123,8 +123,8 @@ package control
 		
 		public function connect():void
 		{
-			_socket.connect("localhost", 15856);
-			//_socket.connect(_host, _port);
+			//_socket.connect("localhost", 15856);
+			_socket.connect(_host, _port);
 		}
 
 		private function socketDataHandler(e:ProgressEvent):void 
