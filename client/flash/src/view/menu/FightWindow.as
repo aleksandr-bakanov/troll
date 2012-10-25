@@ -463,7 +463,7 @@ package view.menu
 		
 		private function areaOpen(e:UserEvent):void 
 		{
-			Debug.out("areaOpen");
+			//Debug.out("areaOpen");
 			for (var id:String in e.data)
 			{
 				// Создаем этаж если его еще не было.
@@ -473,10 +473,10 @@ package view.menu
 				}
 				var floor:Array = _cells[id] as Array;
 				// Проверяем создан ли floorView
-				Debug.out("  id = " + id);
+				//Debug.out("  id = " + id);
 				if (!_floors[id])
 				{
-					Debug.out("  create floor (id) = " + id);
+					//Debug.out("  create floor (id) = " + id);
 					_floors[id] = createFloor();
 					var f:Sprite = _floors[id] as Sprite;
 					f.visible = _model.fInfo.players[_model.fInfo.selfId].floorId == parseInt(id);

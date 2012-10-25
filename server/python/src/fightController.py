@@ -59,6 +59,7 @@ class Cell:
 class FightController:
 	def __init__(self, players):
 		self.players = players
+		self.playersCount = 0
 		i = 0
 		for p in players:
 			if p:
@@ -71,6 +72,7 @@ class FightController:
 				p.fInfo["curWeapon"] = p.params["handWeapon"]
 				# В начале боя у всех полные жизни
 				p.params["hitPoints"] = p.params["health"]
+				self.playersCount += 1
 				i += 1
 		# Список для отдельного хранения дверей
 		self.doors = []
@@ -241,7 +243,27 @@ class FightController:
 	# мобов.
 	def createMoveOrder(self):
 		order = range(len(self.players))
-		shuffle(order)
+		#print "was",self.players[order[0]].params["speed"],self.players[order[1]].params["speed"]
+		# Преждевременная оптимизация - корень всех зол. (Дональд Кнут)
+		# Сортируем игроков по их скорости
+		k = 0
+		while k < self.playersCount - 1:
+			i = k + 1
+			curSpeed = self.players[order[k]].params["speed"]
+			# j - индекс максимальной скорости в текущем подмассиве
+			j = k
+			while i < self.playersCount:
+				#print "compare ",curSpeed,self.players[order[i]].params["speed"]
+				if curSpeed < self.players[order[i]].params["speed"]:
+					j = i	
+				i += 1
+			# Если j != k, то необходимо переставить их местами
+			if j != k:
+				tmp = order[k]
+				order[k] = order[j]
+				order[j] = tmp
+			k += 1
+		#print "now",self.players[order[0]].params["speed"],self.players[order[1]].params["speed"]
 		return order
 
 	def __del__(self):
@@ -369,6 +391,10 @@ class FightController:
 				if i >= 0:
 					self.moveOrder.remove(p.fInfo["id"])
 				self.players[id] = None
+				# Сообщим остальным что игрок вышел
+				for sp in self.players:
+					if sp:
+						sp.sKillUnit(p.fInfo["id"])
 				break
 			id += 1
 		# Подсчитаем количество оставшихся игроков
