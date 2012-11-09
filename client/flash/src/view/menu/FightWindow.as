@@ -102,12 +102,39 @@ package view.menu
 			Dispatcher.instance.addEventListener(UserEvent.UNIT_DAMAGE, addAnimation);
 			Dispatcher.instance.addEventListener(UserEvent.UNIT_ATTACK, addAnimation);
 			Dispatcher.instance.addEventListener(UserEvent.KILL_UNIT, addAnimation);
+			Dispatcher.instance.addEventListener(UserEvent.ADD_UNIT, addUnit);
 			
 			module.enter.addEventListener(MouseEvent.CLICK, enterHandler);
 			module.change.addEventListener(MouseEvent.CLICK, changeHandler);
 			module.attack.addEventListener(MouseEvent.CLICK, attackHandler);
-			/// TODO: Добавить горячие клавиши для атаки, смены оружия и отправки сообщения.
-			/// TODO: Сделать пульки, умирание.
+		}
+		
+		private function addUnit(e:UserEvent):void 
+		{
+			var unitId:int = e.data.unitId as int;
+			// Вот это пока не используется
+			var placeInMoveOrder:int = e.data.placeInMoveOrder as int;
+			
+			var o:Object = { };
+			o.floorId = e.data.floorId as int;
+			o.x = e.data.x as int;
+			o.y = e.data.y as int;
+			o.name = e.data.name as String;
+			_model.fInfo.players[unitId] = o;
+			
+			if (!_floors[o.floorId])
+			{
+				_floors[o.floorId] = createFloor();
+			}
+			var floor:Sprite = _floors[o.floorId] as Sprite;
+			
+			var player:Unit = new Unit(o.name);
+			player.x = o.x * CELL_WIDTH + (o.y % 2 ? CELL_WIDTH / 2 : 0);
+			player.y = o.y * CELL_HEIGHT * 0.75;
+			floor.addChild(player);
+			_units[unitId] = player;
+			Debug.out("Unit added: floor=" + o.floorId + " x=" + o.x + " y=" + o.y +
+				" name=" + o.name);
 		}
 		
 		private function finishFight(e:UserEvent):void 

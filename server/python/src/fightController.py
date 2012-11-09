@@ -3,7 +3,9 @@ from math import *
 from consts import *
 from random import *
 from struct import pack
+from mob import *
 import threading
+import time
 
 # ======================================================================
 #
@@ -58,7 +60,7 @@ class Cell:
 # ======================================================================
 class FightController:
 	def __init__(self, players):
-		self.players = players
+		self.units = players
 		self.playersCount = 0
 		i = 0
 		for p in players:
@@ -89,6 +91,21 @@ class FightController:
 		self.currentUnit = -1
 		# Таймер ожидания хода
 		self.nextMoveTimer = None
+
+		# Попробуем добавить одного моба, он пока не будет участвовать в порядке ходов,
+		# да и вообще не будет ничего делать, просто стоять там где его поставили.
+		# Пока тестируем команду обнаружения моба на открытой территории и отправки
+		# игрокам сообщения о нем.
+		mob = Mob1()
+		# Наполняем моба информацией.
+		# id у него будет следующий за последним игроком.
+		mob.fInfo["id"] = self.playersCount
+		mob.fInfo["floor"] = 0
+		mob.fInfo["x"] = 4
+		mob.fInfo["y"] = 8
+		mob.fightController = self
+		self.units.append(mob)
+
 		# Запускаем первый ход
 		self.nextMove()
 
@@ -102,47 +119,88 @@ class FightController:
 		if self.currentUnit >= len(self.moveOrder):
 			self.currentUnit = 0
 		# Если все неожиданно ушли или умерли, т.е. в moveOrder никого больше не осталось, то завершаем бой
-		if len(self.moveOrder) == 0:
+		# Также, если остались одни мобы, то есть все игроки разошлись, завершаем бой.
+		if self.checkFightMustFinish():
 			self.finishFight()
 			return
-		# TODO: Здесь нужно проверять кто следующий юнит, если человек,
+		# Здесь нужно проверять кто следующий юнит, если человек,
 		# отправлять всем команду S_YOUR_MOVE, если бот, запускать ИИ.
-		
-		# Сначала отправляем команду
-		for p in self.players:
+		if self.units[self.moveOrder[self.currentUnit]].isMob:
+			self.units[self.moveOrder[self.currentUnit]].makeMove()
+
+		else:
+			# А если это игрок
+			# Сначала отправляем команду
+			for p in self.units:
+				if p and not p.isMob:
+					p.sYourMove(self.moveOrder[self.currentUnit], SECONDS_TO_MOVE)
+					if p.fInfo["id"] == self.units[self.moveOrder[self.currentUnit]].fInfo["id"]:
+						p.params["actPoints"] = int(p.params["speed"])
+			# Затем запускаем таймер ожидания
+			self.nextMoveTimer = threading.Timer(SECONDS_TO_MOVE + 1, self.nextMove)
+			self.nextMoveTimer.start()
+
+	# Функция проверяет не пора ли закончится бою. Отдельная функция, потому что предполагается,
+	# что условий завершения боя может быть множество.
+	def checkFightMustFinish(self):
+		# Проверяем выход всех игроков
+		if len(self.moveOrder) == 0 or self.playersCount == 0:
+			return True
+		# Проверяем убийство всех мобов или всех игроков
+		playersAlive = 0
+		mobsAlive = 0
+		for p in self.units:
 			if p:
-				p.sYourMove(self.moveOrder[self.currentUnit], SECONDS_TO_MOVE)
-				if p.fInfo["id"] == self.players[self.moveOrder[self.currentUnit]].fInfo["id"]:
-					p.params["actPoints"] = int(p.params["speed"])
-		# Затем запускаем таймер ожидания
-		self.nextMoveTimer = threading.Timer(SECONDS_TO_MOVE + 1, self.nextMove)
-		self.nextMoveTimer.start()
+				if p.isMob and p.params["hitPoints"] > 0:
+					mobsAlive += 1
+				elif not p.isMob and p.params["hitPoints"] > 0:
+					playersAlive += 1
+		if not playersAlive or not mobsAlive:
+			return True
+		# Если ничего такого не случилось, то бою еще рано завершаться
+		return False
 		
 	# Отправка клиентам начальной информации о бое.
 	def sendStartInfo(self):
 		comSize = 0
-		data = pack('<hb', S_START_FIGHT_INFO, len(self.players))
+		# Пакуем id команды и количество игроков, т.к. изначально информацию
+		# о мобах мы отправлять не будем. Ибо договорились не расставлять мобов
+		# так, чтобы их нужно было включать в порядок ходов на самом первом ходе.
+		# Хотя это вполне возможно. Нужно ввести команду "Добавить моба", которая
+		# извещала бы клиентов о появлении моба на поле.
+		data = pack('<hb', S_START_FIGHT_INFO, self.playersCount)
 		comSize += 3
 		playerId = 0
-		for p in self.players:
-			if p:
+		# Проходимся по юнитам
+		for p in self.units:
+			# Нас интересуют только игроки
+			if p and not p.isMob:
+				# Пакуем id юнита и его координаты
 				data += pack('<bbhh', playerId, p.fInfo["floor"], p.fInfo["x"], p.fInfo["y"])
 				comSize += 6
+				# Пакуем имя юнита
 				mes = unicode(p.name, 'utf-8')
 				mesLen = len(mes.encode('utf-8'))
 				data += pack('<h' + str(mesLen) + 's', mesLen, mes.encode('utf-8'))
 				comSize += mesLen + SHORT_SIZE;
-			else:
+			elif not p:
+				# Иначе если игрок каким-то образом умудрился выйти из боя к этому моменту,
+				# так что в self.units не осталось на него ссылки (p == None) мы пишем -1 как id игрока
+				# что как раз и сообщает клиенту, что информации о координатах игрока и его имени
+				# не последует.
 				data += pack('<b', -1)
 				comSize += 1
 			playerId += 1
+		# Пакуем порядок ходов. Сколько байт содержит порядок ходов понятно из self.playersCount,
+		# записанного ранее.
 		for i in self.moveOrder:
 			data += pack('<b', i)
-		comSize += len(self.players) + 1
+		# Здесь добавлен +1, так как каждому игроку мы отправляем еще и его собственный your_id [1]
+		comSize += self.playersCount + 1
 		data = pack('<i', comSize) + data
 		playerId = 0
-		for p in self.players:
-			if p:
+		for p in self.units:
+			if p and not p.isMob:
 				p.sendData(data + pack('<b', playerId))
 			playerId += 1
 
@@ -151,17 +209,23 @@ class FightController:
 	def sendOpenedArea(self, area):
 		comSize = 0
 		# Пишем CMD_ID и floors_count, но сначала посчитаем количество непустых этажей
+		# Подсчитаем количество непустых этажей в переданном в функцию массиве.
+		# Нет смысла отправлять информацию об этаже если на нем нет ни одной открытой ячейки.
 		floorsCount = 0
 		for floor in area:
 			if len(floor):
 				floorsCount += 1
+		# Если вдруг случилось такое, что все этажи пустые, то нечего и передавать.
 		if not floorsCount:
 			return
+		# Пакуем id команды и количество этажей
 		data = pack('<hb', S_AREA_OPEN, floorsCount)
 		comSize += 3
 		floorId = 0
 		for floor in area:
 			cellsCount = len(floor)
+			# Да, непустоту этажа здесь все еще нужно проверять, хотя можно было бы исключать
+			# пустые этажи из массива area, но это потребовало каким-нибудь хранить еще и id этажа.
 			if cellsCount:
 				data += pack('<bh', floorId, cellsCount)
 				comSize += 3
@@ -170,6 +234,9 @@ class FightController:
 					comSize += 5
 					# Дополнительные параметры пола
 					if cell.type == CT_FLOOR:
+						# Пол может содержать переход на другой этаж, о чем свидетельствует поле toFloor.
+						# Возможно позже протокол будет переписан на более экономичный и параметры
+						# клеток-переходов будут отправляться в отдельной команде.
 						data += pack('<b', cell.toFloor)
 						comSize += 1
 						if cell.toFloor >= 0:
@@ -190,9 +257,60 @@ class FightController:
 								comSize += 2
 			floorId += 1
 		data = pack('<i', comSize) + data
-		for p in self.players:
-			if p:
+		for p in self.units:
+			if p and not p.isMob:
 				p.sendData(data)
+		# Если дошли сюда, то точно была открытая территория, которая и была отправлена.
+		# Значит на этой территории потенциально могли быть мобы, еще не известные игрокам.
+		# Знают игроки о мобе или нет можно проверить по нахождению id моба в moveOrder.
+		# При этом, если моб был убит, его нужно исключить из moveOrder, что и происходит
+		# в функции removePlayer. Только функция removePlayer пока расчитана исключительно
+		# на игроков, т.к. уменьшает еще и self.playersCount, а эта переменная показывает
+		# количество именно игроков, но не мобов. Значит придется скопипастить функционал.
+		self.checkAreaForNewMobs(area)
+
+	# Функция проверяет переданную ей территорию на наличие мобов еще неизвестных игрокам.
+	# Если такие мобы есть на данной территории, информация о них рассылается игрокам.
+	def checkAreaForNewMobs(self, area):
+		floorId = 0
+		for floor in area:
+			cellsCount = len(floor)
+			# Да, непустоту этажа здесь все еще нужно проверять, хотя можно было бы исключать
+			# пустые этажи из массива area, но это потребовало каким-нибудь образом хранить еще и id этажа.
+			if cellsCount:
+				for cell in floor:
+					# Нужно проверить нет ли на ячейке моба
+					# TODO: Можно при смерти юнита (неважно кого, игрока или моба), делать его координаты
+					# равные -1, -1, чтобы он уже не находился функцией, или просто в функции проверять
+					# сколько у юнита жизней.
+					mob = self.getUnitByCoordinates(floorId, cell.x, cell.y)
+					# На ячейке может вообще никого не быть (тогда функция вернет None),
+					# либо это может быть игрок, а не моб.
+					if mob and mob.isMob and not mob.fInfo["id"] in self.moveOrder:
+						# Нашли моба. Прежде чем отправлять о нем информацию, нужно добавить его в moveOrder,
+						# если это еще не было сделано. Это могло быть сделано раньше, если моб учуял игрока
+						# до того, как тот его заметил.
+						if not mob.fInfo["id"] in self.moveOrder:
+							# Пока будем просто добавлять моба в конец moveOrder
+							self.moveOrder.append(mob.fInfo["id"])
+						# А вот теперь можно и отправить информацию о мобе игрокам.
+						comSize = 0
+						data = pack('<hbbhh', S_ADD_UNIT, mob.fInfo["id"], mob.fInfo["floor"], mob.fInfo["x"], mob.fInfo["y"])
+						comSize += 8
+						# Пакуем имя юнита
+						mes = unicode(mob.name, 'utf-8')
+						mesLen = len(mes.encode('utf-8'))
+						data += pack('<h' + str(mesLen) + 's', mesLen, mes.encode('utf-8'))
+						comSize += mesLen + SHORT_SIZE;
+						# Пакуем его позицию в moveOrder
+						# TODO: Разобраться с расположением мобов в moveOrder, пока будем отправлять -1
+						data += pack('<b', -1)
+						comSize += 1
+						data = pack('<i', comSize) + data
+						for p in self.units:
+							if p and not p.isMob:
+								p.sendData(data)
+			floorId += 1
 
 	# В эту функцию следует подавать уже подготовленный двумерный массив.
 	# area = [ [cell, cell, ... ], ... ]
@@ -234,27 +352,27 @@ class FightController:
 						comSize += 6
 			floorId += 1
 		data = pack('<i', comSize) + data
-		for p in self.players:
-			if p:
+		for p in self.units:
+			if p and not p.isMob:
 				p.sendData(data)
 
 	# В moveOrder должны храниться id юнитов. Первые id (с нулевого
-	# по len(self.players) - 1) отведены для игроков, остальные под
+	# по len(self.units) - 1) отведены для игроков, остальные под
 	# мобов.
 	def createMoveOrder(self):
-		order = range(len(self.players))
-		#print "was",self.players[order[0]].params["speed"],self.players[order[1]].params["speed"]
+		order = range(len(self.units))
+		#print "was",self.units[order[0]].params["speed"],self.units[order[1]].params["speed"]
 		# Преждевременная оптимизация - корень всех зол. (Дональд Кнут)
 		# Сортируем игроков по их скорости
 		k = 0
 		while k < self.playersCount - 1:
 			i = k + 1
-			curSpeed = self.players[order[k]].params["speed"]
+			curSpeed = self.units[order[k]].params["speed"]
 			# j - индекс максимальной скорости в текущем подмассиве
 			j = k
 			while i < self.playersCount:
-				#print "compare ",curSpeed,self.players[order[i]].params["speed"]
-				if curSpeed < self.players[order[i]].params["speed"]:
+				#print "compare ",curSpeed,self.units[order[i]].params["speed"]
+				if curSpeed < self.units[order[i]].params["speed"]:
 					j = i	
 				i += 1
 			# Если j != k, то необходимо переставить их местами
@@ -263,11 +381,11 @@ class FightController:
 				order[k] = order[j]
 				order[j] = tmp
 			k += 1
-		#print "now",self.players[order[0]].params["speed"],self.players[order[1]].params["speed"]
+		#print "now",self.units[order[0]].params["speed"],self.units[order[1]].params["speed"]
 		return order
 
 	def __del__(self):
-		del self.players
+		del self.units
 		del self.map
 		del self.knownArea
 		del self.doors
@@ -283,8 +401,8 @@ class FightController:
 		# Следует заметить, что в self.knownArea хранится не трехмерный список,
 		# а двумерный. Т.е. этаж является одномерным списком перечисляющим
 		# известные игрокам клетки.
-		for p in self.players:
-			if p:
+		for p in self.units:
+			if p and not p.isMob:
 				floorId = p.fInfo["floor"]
 				floorHeight = len(self.map[floorId])
 				floorWidth = len(self.map[floorId][0])
@@ -353,32 +471,33 @@ class FightController:
 		return map
 
 	def sendChatMessage(self, message):
-		for p in self.players:
-			if p:
+		for p in self.units:
+			if p and not p.isMob:
 				p.sChatMessage(message)
 
 	def finishFight(self):
+		time.sleep(2)
 		if self.nextMoveTimer and self.nextMoveTimer.is_alive():
 			self.nextMoveTimer.cancel()
 		self.nextMoveTimer = None
 		id = 0
-		for p in self.players:
+		for p in self.units:
 			if p:
-				p.sFinishFight()
+				if not p.isMob:
+					p.sFinishFight()
 				p.fightController = None
-				self.players[id] = None
+				self.units[id] = None
 			id += 1
 		self.map = None
 		self.knownArea = None
 		self.moveOrder = None
-		self.players = None
-		#del self
+		self.units = None
 
 	# Удаление игрока в случае его отключения. Надо сюда дописать
 	# умершвление уходящего игрока.
 	def removePlayer(self, player):
 		id = 0
-		for p in self.players:
+		for p in self.units:
 			if p == player:
 				# Удалим игрока также из moveOrder
 				i = -1
@@ -390,19 +509,16 @@ class FightController:
 					self.currentUnit -= 1
 				if i >= 0:
 					self.moveOrder.remove(p.fInfo["id"])
-				self.players[id] = None
+				self.units[id] = None
+				self.playersCount -= 1
 				# Сообщим остальным что игрок вышел
-				for sp in self.players:
-					if sp:
+				for sp in self.units:
+					if sp and not sp.isMob:
 						sp.sKillUnit(p.fInfo["id"])
 				break
 			id += 1
-		# Подсчитаем количество оставшихся игроков
-		count = 0
-		for p in self.players:
-			if p:
-				count += 1
-		if not count:
+		# Проверяем количество оставшихся игроков
+		if self.checkFightMustFinish():
 			self.finishFight()
 
 	# Функция принимает координаты стартовой клетки и финишной.
@@ -523,8 +639,8 @@ class FightController:
 		unit.fInfo["x"] = x
 		unit.fInfo["y"] = y
 		# TODO: Не забыть отнять ОД
-		for p in self.players:
-			if p:
+		for p in self.units:
+			if p and not p.isMob:
 				p.sTeleportUnit(unit.fInfo["id"], floor, x, y)
 
 
@@ -557,8 +673,8 @@ class FightController:
 	# Функция изменяет тип ячейки и сообщает об этом игрокам
 	def changeCellType(self, cell, type):
 		cell.type = type
-		for p in self.players:
-			if p:
+		for p in self.units:
+			if p and not p.isMob:
 				p.sChangeCell(cell.floor, cell.x, cell.y, cell.type)
 
 	def unitWantAttack(self, player, x, y):
@@ -585,8 +701,8 @@ class FightController:
 			# TODO: добавить сюда сопротивление цели
 			if unit.params["hitPoints"] > 0:
 				unit.params["hitPoints"] -= damage
-				for p in self.players:
-					if p:
+				for p in self.units:
+					if p and not p.isMob:
 						p.sUnitAttack(player.fInfo["id"], x, y)
 						p.sUnitDamage(damage, unit.fInfo["id"])
 				# Если юнит умер, сообщаем об этом. Кроме того нужно исключить его
@@ -595,16 +711,16 @@ class FightController:
 				# проверки завершения боя, т.к. могут быть различные условия его завершения)
 				if unit.params["hitPoints"] <= 0:
 					unit.params["hitPoints"] = 0
-					for p in self.players:
-						if p:
+					for p in self.units:
+						if p and not p.isMob:
 							# Шлём известие о смерти юнита
 							p.sKillUnit(unit.fInfo["id"])
-							# Если это умирающий юнит
-							if p == unit:
-								# Удалим его также из moveOrder
-								if self.moveOrder.index(unit.fInfo["id"]) >= self.currentUnit:
-									self.currentUnit -= 1
-								self.moveOrder.remove(unit.fInfo["id"])
+					# Удалим умершего также из moveOrder
+					# TODO: вот здесь нужно быть внимательней и проверять сначала,
+					# действительно ли id умирающего юнита есть в moveOrder.
+					if self.moveOrder.index(unit.fInfo["id"]) >= self.currentUnit:
+						self.currentUnit -= 1
+					self.moveOrder.remove(unit.fInfo["id"])
 
 		elif self.map[floor][y][x].type == CT_WALL:
 			cell = self.map[floor][y][x]
@@ -612,16 +728,16 @@ class FightController:
 				player.params["actPoints"] -= od
 				# Атакуем стену
 				cell.hp -= damage
-				for p in self.players:
-					if p:
+				for p in self.units:
+					if p and not p.isMob:
 						p.sUnitAttack(player.fInfo["id"], x, y)
 						p.sUnitDamage(damage, -1, floor, x, y)
 				if cell.hp <= 0:
 					cell.hp = 0
 					self.changeCellType(cell, CT_FLOOR)
 					# Тут стена рушится, поэтому нужно узнать не увидят ли игроки чего нового.
-					for p in self.players:
-						if p:
+					for p in self.units:
+						if p and not p.isMob:
 							# Находим ячейки, которые видно этому игроку
 							floorId = p.fInfo["floor"]
 							floorHeight = len(self.map[floorId])
@@ -658,13 +774,12 @@ class FightController:
 
 	def getUnitByCoordinates(self, floor, x, y):
 		unit = None
-		for p in self.players:
+		for p in self.units:
 			if p:
 				if p.fInfo["floor"] == floor and p.fInfo["x"] == x and p.fInfo["y"] == y:
 					unit = p
 					break
 		return unit
-
 
 	def unitWantMove(self, player, x, y):
 		# Проверка дозволенности хода
@@ -717,8 +832,8 @@ class FightController:
 		unit.fInfo["x"] = x
 		unit.fInfo["y"] = y
 		# TODO: Не забыть отнять ОД
-		for p in self.players:
-			if p:
+		for p in self.units:
+			if p and not p.isMob:
 				p.sMoveUnit(unit.fInfo["id"], path)
 			
 

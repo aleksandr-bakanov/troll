@@ -47,6 +47,7 @@ package control
 		public static const S_CHANGE_CELL:int = 49;
 		public static const S_TELEPORT_UNIT:int = 51;
 		public static const S_KILL_UNIT:int = 53;
+		public static const S_ADD_UNIT:int = 55;
 
 		// Client side
 		public static const C_LOGIN:int = 2;
@@ -205,6 +206,7 @@ package control
 				case S_KILL_UNIT: sKillUnit(); break;
 				case S_FINISH_FIGHT: sFinishFight(); break;
 				case S_UNIT_ATTACK: sUnitAttack(); break;
+				case S_ADD_UNIT: sAddUnit(); break;
 				default: break;
 			}
 			_lastComSize = 0;
@@ -500,6 +502,17 @@ package control
 			var x:int = _socket.readShort();
 			var y:int = _socket.readShort();
 			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.UNIT_ATTACK, { unitId:unitId, x:x, y:y } ));
+		}
+		
+		private function sAddUnit():void 
+		{
+			var unitId:int = _socket.readByte();
+			var floorId:int = _socket.readByte();
+			var x:int = _socket.readShort();
+			var y:int = _socket.readShort();
+			var unitName:String = _socket.readUTF();
+			var placeInMoveOrder:int = _socket.readByte();
+			Dispatcher.instance.dispatchEvent(new UserEvent(UserEvent.ADD_UNIT, { unitId:unitId, floorId:floorId, x:x, y:y, placeInMoveOrder:placeInMoveOrder, name:unitName } ));
 		}
 
 

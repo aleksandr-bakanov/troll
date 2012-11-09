@@ -48,6 +48,7 @@ package control
 		public static const UNIT_DAMAGE:String = "unit_damage";
 		public static const UNIT_ATTACK:String = "unit_attack";
 		public static const KILL_UNIT:String = "kill_unit";
+		public static const ADD_UNIT:String = "add_unit";
 		
 		public var data:Object;
 		

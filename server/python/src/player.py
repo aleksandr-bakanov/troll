@@ -41,6 +41,7 @@ class Player:
 		self.bidId = -1
 		self.fightController = None
 		self.fInfo = {}
+		self.isMob = False
 		self.addSelfInPlayers()
 		self.initBackpack()
 		self.sendBidsList()
