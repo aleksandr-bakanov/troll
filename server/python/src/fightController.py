@@ -294,22 +294,10 @@ class FightController:
 							# Пока будем просто добавлять моба в конец moveOrder
 							self.moveOrder.append(mob.fInfo["id"])
 						# А вот теперь можно и отправить информацию о мобе игрокам.
-						comSize = 0
-						data = pack('<hbbhh', S_ADD_UNIT, mob.fInfo["id"], mob.fInfo["floor"], mob.fInfo["x"], mob.fInfo["y"])
-						comSize += 8
-						# Пакуем имя юнита
-						mes = unicode(mob.name, 'utf-8')
-						mesLen = len(mes.encode('utf-8'))
-						data += pack('<h' + str(mesLen) + 's', mesLen, mes.encode('utf-8'))
-						comSize += mesLen + SHORT_SIZE;
-						# Пакуем его позицию в moveOrder
 						# TODO: Разобраться с расположением мобов в moveOrder, пока будем отправлять -1
-						data += pack('<b', -1)
-						comSize += 1
-						data = pack('<i', comSize) + data
 						for p in self.units:
 							if p and not p.isMob:
-								p.sendData(data)
+								p.sAddUnit(mob.fInfo["id"], mob.fInfo["floor"], mob.fInfo["x"], mob.fInfo["y"], mob.name, -1)
 			floorId += 1
 
 	# В эту функцию следует подавать уже подготовленный двумерный массив.
@@ -404,11 +392,9 @@ class FightController:
 		for p in self.units:
 			if p and not p.isMob:
 				floorId = p.fInfo["floor"]
-				floorHeight = len(self.map[floorId])
-				floorWidth = len(self.map[floorId][0])
 				xc = p.fInfo["x"]
 				yc = p.fInfo["y"]
-				area = self.getCellsInRadius(floorId, floorWidth, floorHeight, xc, yc, 0, VIEW_RADIUS, True, True)
+				area = self.getCellsInRadius(floorId, xc, yc, 0, VIEW_RADIUS, True, True)
 				inResult = set(result[floorId])
 				inArea = set(area)
 				newArea = inArea - inResult
@@ -613,9 +599,7 @@ class FightController:
 			player.fInfo["y"] = cell.toY
 			# Находим ячейки, которые видно с этой позиции
 			floorId = player.fInfo["floor"]
-			floorHeight = len(self.map[floorId])
-			floorWidth = len(self.map[floorId][0])
-			area = self.getCellsInRadius(floorId, floorWidth, floorHeight, cell.toX, cell.toY, 0, VIEW_RADIUS, True, True)
+			area = self.getCellsInRadius(floorId, cell.toX, cell.toY, 0, VIEW_RADIUS, True, True)
 			inKnownArea = set(self.knownArea[floorId])
 			inArea = set(area)
 			newArea = inArea - inKnownArea
@@ -740,9 +724,7 @@ class FightController:
 						if p and not p.isMob:
 							# Находим ячейки, которые видно этому игроку
 							floorId = p.fInfo["floor"]
-							floorHeight = len(self.map[floorId])
-							floorWidth = len(self.map[floorId][0])
-							area = self.getCellsInRadius(floorId, floorWidth, floorHeight, p.fInfo["x"], p.fInfo["y"], 0, VIEW_RADIUS, True, True)
+							area = self.getCellsInRadius(floorId, p.fInfo["x"], p.fInfo["y"], 0, VIEW_RADIUS, True, True)
 							inKnownArea = set(self.knownArea[floorId])
 							inArea = set(area)
 							newArea = inArea - inKnownArea
@@ -808,9 +790,7 @@ class FightController:
 				path = path[2:]
 				# Находим ячейки, которые видно с этой позиции
 				floorId = player.fInfo["floor"]
-				floorHeight = len(self.map[floorId])
-				floorWidth = len(self.map[floorId][0])
-				area = self.getCellsInRadius(floorId, floorWidth, floorHeight, step[0], step[1], 0, VIEW_RADIUS, True, True)
+				area = self.getCellsInRadius(floorId, step[0], step[1], 0, VIEW_RADIUS, True, True)
 				inKnownArea = set(self.knownArea[floorId])
 				inArea = set(area)
 				newArea = inArea - inKnownArea
@@ -1028,7 +1008,9 @@ class FightController:
 	# Функция возвращает список ячеек на расстоянии radius от ячейки (xc;yc).
 	# Если флаг checkObstacles установлен, будет проведена дополнительная проверка
 	# на загораживание ячеек препятствиями.
-	def getCellsInRadius(self, floorId, width, height, xc, yc, r1, r2, includeCenter = False, checkObstacles = False):
+	def getCellsInRadius(self, floorId, xc, yc, r1, r2, includeCenter = False, checkObstacles = False):
+		width = len(self.map[floorId][0])
+		height = len(self.map[floorId])
 		cells = self.map[floorId]
 		# Проверка на неверные данные
 		if width <= 0 or height <= 0 or not cells or yc < 0 or yc >= height or xc < 0 or xc >= width or r1 < 0 or r2 < 0 or (r1 >= r2 and r2 > 0):

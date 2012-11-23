@@ -9,6 +9,7 @@ class Bid:
 	# @param op		ОП создателя заявки
 	# @param cb		callback (timer end function)
 	# @param count	max players count
+	# @param name	имя заявки
 	def __init__(self, id, op, cb, count, name):
 		self.id = id
 		self.op = op

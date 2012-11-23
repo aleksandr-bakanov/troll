@@ -1,4 +1,6 @@
 # coding=utf-8
+import random
+from consts import *
 # ======================================================================
 #
 # Базовый класс для мобов
@@ -20,6 +22,8 @@ class Mob:
 			"curWeapon":None
 		}
 		self.name = "mob"
+		# Радиус обзора
+		self.visionRadius = 2
 
 	def __del__(self):
 		print "~Mob", id(self)
@@ -54,17 +58,65 @@ class Mob1(Mob):
 		self.params["actPoints"] = 4
 		# Переменная fc используется для сокращения записи
 		fc = self.fightController
-		for p in fc.units:
-			if p and not p.isMob and p.fInfo["floor"] == self.fInfo["floor"] and p.params["hitPoints"] > 0:
-				# Смотрим расстояние до игрока
-				floorId = self.fInfo["floor"]
-				xs = self.fInfo["x"]
-				ys = self.fInfo["y"]
-				x = p.fInfo["x"]
-				y = p.fInfo["y"]
-				distance = fc.calculateWayLength(len(fc.map[floorId][0]), len(fc.map[floorId]), xs, ys, x, y)
-				if distance <= 2:
-					# TODO: Тут бы еще смотреть не загорожен ли чем игрок от моба
-					fc.unitWantAttack(self, x, y)
-					break
-		fc.nextMove()
+		# Берем клетки в радиусе self.visionRadius
+		floorId = self.fInfo["floor"]
+		xs = self.fInfo["x"]
+		ys = self.fInfo["y"]
+		cells = fc.getCellsInRadius(floorId, xs, ys, 0, self.visionRadius, False, True)
+		# Флаг установится в True если была совершена атака
+		wasAttack = False
+		# Проходимся по клеткам, которые являются полом.
+		for cell in cells:
+			# Смотрим, есть ли на клетке юнит, не моб
+			unit = fc.getUnitByCoordinates(floorId, cell.x, cell.y)
+			if unit and not unit.isMob:
+				# Если есть, атакуем его и уходим
+				fc.unitWantAttack(self, cell.x, cell.y)
+				wasAttack = True
+				break
+		# Если была совершена атака, передаем ход следующему игроку
+		if wasAttack:
+			fc.nextMove()
+		# Иначе идем куда-нибудь
+		else:
+			# Допустим будем брать только шесть соседних клеток. Потом
+			# выбирать из них случайную. Если она окажется непроходимой,
+			# то удалим ее из списка выбора и возьмем следующую случайную
+			# клетку. Как находим свободную, переходим в нее.
+			cells = fc.getCellsInRadius(floorId, xs, ys, 0, 1, False, True)
+			freeCellFound = False
+			ind = -1
+			while not freeCellFound and len(cells):
+				ind = random.randint(0, len(cells) - 1)
+				if not cells[ind].type == CT_FLOOR:
+					del cells[ind]
+					continue
+				else:
+					freeCellFound = True
+			# Проверяем нашли ли ячейку, в которую можно пойти
+			if freeCellFound:
+				# Сначала перемещаем моба
+				cell = cells[ind]
+				oldX = self.fInfo["x"]
+				oldY = self.fInfo["y"]
+				self.fInfo["x"] = cell.x
+				self.fInfo["y"] = cell.y
+				# Потом смотрим, если моб пришел в ячейку, известную игрокам,
+				# то отправляем им сообщение о перемещении моба.
+				# Предварительно, если моба не было в moveOrder, т.е. игроки
+				# о нем еще ничего не знали, нужно отправить команду S_ADD_UNIT.
+				if cell in fc.knownArea[floorId]:
+					if not self.fInfo["id"] in fc.moveOrder:
+						# Пока будем просто добавлять моба в конец moveOrder
+						fc.moveOrder.append(self.fInfo["id"])
+						for p in fc.units:
+							if p and not p.isMob:
+								p.sAddUnit(self.fInfo["id"], self.fInfo["floor"], oldX, oldY, self.name, -1)
+					# Теперь можно отправить команду S_MOVE_UNIT
+					fc.moveUnit(self, [cell.x, cell.y], cell.x, cell.y)
+
+				fc.nextMove()
+			# Если не нашли свободную ячейку, просто передаем ход
+			# следующему игроку
+			else:
+				fc.nextMove()

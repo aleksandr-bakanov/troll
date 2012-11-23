@@ -47,6 +47,7 @@ class Player:
 		self.sendBidsList()
 
 	def __del__(self):
+		self.bidsController = None
 		print "~Player (", self.id, self.name, ") deleted."
 
 	# ==================================================================
@@ -273,6 +274,21 @@ class Player:
 
 	def sUnitAttack(self, unitId, x, y):
 		data = pack('<ihbhh', 7, S_UNIT_ATTACK, unitId, x, y)
+		self.sendData(data)
+
+	def sAddUnit(self, unitId, floorId, x, y, unitName, moveOrderPosition):
+		comSize = 0
+		data = pack('<hbbhh', S_ADD_UNIT, unitId, floorId, x, y)
+		comSize += 8
+		# Пакуем имя юнита
+		mes = unicode(unitName, 'utf-8')
+		mesLen = len(mes.encode('utf-8'))
+		data += pack('<h' + str(mesLen) + 's', mesLen, mes.encode('utf-8'))
+		comSize += mesLen + SHORT_SIZE;
+		# Пакуем его позицию в moveOrder
+		data += pack('<b', moveOrderPosition)
+		comSize += 1
+		data = pack('<i', comSize) + data
 		self.sendData(data)
 		
 	

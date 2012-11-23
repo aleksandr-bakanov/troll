@@ -159,17 +159,20 @@ package view.menu
 				for (var y:int = 0; y < floor.length; y++)
 				{
 					var column:Array = floor[y] as Array;
-					for (var x:int = 0; x < column.length; x++)
+					if (column)
 					{
-						var cell:Cell_asset = floor[y][x] as Cell_asset;
-						if (cell)
+						for (var x:int = 0; x < column.length; x++)
 						{
-							cell.removeEventListener(MouseEvent.CLICK, cellClickHandler);
-							cell.info = null;
-							if (cell.parent)
-								cell.parent.removeChild(cell);
+							var cell:Cell_asset = floor[y][x] as Cell_asset;
+							if (cell)
+							{
+								cell.removeEventListener(MouseEvent.CLICK, cellClickHandler);
+								cell.info = null;
+								if (cell.parent)
+									cell.parent.removeChild(cell);
+							}
+							floor[y][x] = null;
 						}
-						floor[y][x] = null;
 					}
 					floor[y] = null;
 				}
@@ -484,7 +487,8 @@ package view.menu
 		{
 			for (var id:String in _floors)
 			{
-				(_floors[id] as DisplayObject).visible = id == String(floorId);
+				if (_floors[id])
+					(_floors[id] as DisplayObject).visible = id == String(floorId);
 			}
 		}
 		
