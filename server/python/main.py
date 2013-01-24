@@ -10,6 +10,8 @@ import threading
 from src.player import run
 from src.config import *
 
+print "TrollControll main server is running."
+
 # При старте сервера делаем всех игроков не играющими
 import MySQLdb
 db = MySQLdb.connect(host=MYSQL_HOST, user=MYSQL_USER, passwd=MYSQL_PASS, db=MYSQL_DB, charset='utf8')
@@ -18,6 +20,7 @@ c.execute("UPDATE user SET is_playing = 0 WHERE 1")
 db.commit()
 c.close()
 db.close()
+print "Database inited."
 
 # Создаем контроллер заявок.
 import src.bidsController
@@ -31,6 +34,7 @@ PORT = 15856
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind((HOST, PORT))
 server.listen(32)
+print "Bind to", PORT, "port."
 while 1:
 	# Ждем подключения клиента
 	conn, addr = server.accept()

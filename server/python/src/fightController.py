@@ -1,7 +1,7 @@
 # coding=utf-8
 from math import *
 from consts import *
-from random import *
+import random
 from struct import pack
 from mob import *
 import threading
@@ -79,7 +79,15 @@ class FightController:
 		# Список для отдельного хранения дверей
 		self.doors = []
 		# Создаем карту
-		self.map = self.createMap()
+		self.amap = self.createMap()
+		
+		# Вот здесь нужно пройтись по координатам игроков и сделать
+		# Ячейки, на которых они стоят проходимым полом.
+		for p in players:
+			if p:
+				cell = self.amap[p.fInfo["floor"]][p.fInfo["y"]][p.fInfo["x"]]
+				cell.type = CT_FLOOR
+		
 		self.knownArea = self.getKnownArea()
 		self.moveOrder = self.createMoveOrder()
 		self.sendStartInfo()
@@ -101,8 +109,8 @@ class FightController:
 		# id у него будет следующий за последним игроком.
 		mob.fInfo["id"] = self.playersCount
 		mob.fInfo["floor"] = 0
-		mob.fInfo["x"] = 4
-		mob.fInfo["y"] = 8
+		mob.fInfo["x"] = 7
+		mob.fInfo["y"] = 7
 		mob.fightController = self
 		self.units.append(mob)
 
@@ -374,7 +382,7 @@ class FightController:
 
 	def __del__(self):
 		del self.units
-		del self.map
+		del self.amap
 		del self.knownArea
 		del self.doors
 		print "~FightController"
@@ -383,7 +391,7 @@ class FightController:
 	def getKnownArea(self):
 		result = []
 		# Создаем этажи
-		for floor in self.map:
+		for floor in self.amap:
 			result.append([])
 
 		# Следует заметить, что в self.knownArea хранится не трехмерный список,
@@ -401,60 +409,207 @@ class FightController:
 				result[floorId] = result[floorId] + list(newArea)
 		return result
 
+	def createMapStageModel(self, width, height):
+		width -= 2
+		height -= 2
+		amap = []
+		x = 0
+		y = 0
+		# Заполняем его в почти шахматном порядке нулями и единицами.
+		# Нуль соответствует стене, единица - полу.
+		n = 0
+		while y < height:
+			amap.append([])
+			while x < width:
+				if y % 2:
+					amap[y].append(0)
+				elif n % 2:
+					amap[y].append(0)
+				else:
+					amap[y].append(1)
+				n += 1
+				x += 1
+			x = 0
+			y += 1
+		# Получилась заготовка лабиринта под алгоритм Depth-first search.
+		# Теперь, согласно этому алгоритму начинаем создавать лабиринт
+		# из точки (0;0).
+		# Итак, мы находимся в некоторой точке лабиринта. Из нее мы должны
+		# продвинутся с любую соседнюю еще непосещенную точку, убрав между
+		# ними стену. Уходя из текущей точки, помечае ее как посещенную
+		# и добавляем в стек. Если так окажется, что все соседи текущей
+		# точки посещены, передвигаемся в точку, взятую с вершины стека.
+		# Если же стек пуст, значит алгоритм завершил работу.
+		# Итак, мы в точке (0;0)
+		x = 0
+		y = 0
+		astack = []
+		astack.append([x, y])
+		# Сразу пометим начальную клетку как посещенную
+		amap[y][x] = 2
+		# Выбираем куда нам пойти, направо или вниз
+		direction = random.randint(0, 1)
+		if direction:
+			# Идем направо. Убираем стену.
+			amap[y][x + 1] = 1
+			# Перемещаемся в новую клетку
+			x += 2
+		else:
+			# Идем вниз.
+			amap[y + 1][x] = 1
+			x += 2
+		# А это тут будут константы для удобочитаемости
+		UP = 0
+		RIGHT = 1
+		DOWN = 2
+		LEFT = 3
+		FREE = 1
+		VISIT = 2
+		# Вот теперь у нас в стеке есть одна ячейка и мы можем крутить
+		# алгоритм до тех пор, пока стек не опустеет.
+		while len(astack):
+			# Узнаем куда можно пойти.
+			ways = []
+			# Вверх
+			if y - 2 >= 0 and amap[y - 2][x] == FREE:
+				ways.append(UP)
+			# Вправо
+			if x + 2 < width and amap[y][x + 2] == FREE:
+				ways.append(RIGHT)
+			# Вниз
+			if y + 2 < height and amap[y + 2][x] == FREE:
+				ways.append(DOWN)
+			# Влево
+			if x - 2 >= 0 and amap[y][x - 2] == FREE:
+				ways.append(LEFT)
+			# Если есть куда идти, то выбираем случайное направление
+			if len(ways):
+				direction = ways[random.randint(0, len(ways) - 1)]
+				# Сохраняем текущую ячейку в стеке, помечаем ее как посещенную
+				# и переходим в новую ячейку, убирая соответствующую стену.
+				astack.append([x, y])
+				amap[y][x] = VISIT
+				if direction == UP:
+					amap[y - 1][x] = FREE
+					y -= 2
+				elif direction == RIGHT:
+					amap[y][x + 1] = FREE
+					x += 2
+				elif direction == DOWN:
+					amap[y + 1][x] = FREE
+					y += 2
+				else:
+					amap[y][x - 1] = FREE
+					x -= 2
+				# Продолжаем создание лабиринта
+				continue
+			# Если же идти некуда, то нужно вернуться в клетку, лежащую на вершине стека.
+			else:
+				amap[y][x] = VISIT
+				cell = astack.pop()
+				x = cell[0]
+				y = cell[1]
+				# И продолжаем создание лабиринта
+				continue
+		# Окружаем созданный лабиринт внешними стенами
+		d = 0
+		while d < height:
+			amap[d].insert(0, 0)
+			amap[d].append(0)
+			d += 1
+		d = 0
+		w = []
+		width += 2
+		while d < width:
+			w.append(0)
+			d += 1
+		amap.insert(0, w)
+		amap.append(w)
+		# Возвращаем созданную модель
+		return amap
+
 	def createMap(self):
-		map = [[],[]]
-		sizeX = 10
-		sizeY = 10
-		walls = [[2,2],[4,2],[6,2],[8,2],[1,4],[3,4],[5,4],[7,4],[2,6],[4,6],[6,6],[8,6],[1,8],[3,8],[5,8],[7,8]]
+		# Создаем один этаж карты. Важно помнить, что размеры width и height
+		# передаваемые createMapStageModel должны быть нечетными.
+		width = 9
+		height = 9
+		stage = self.createMapStageModel(width, height)
+		amap = [[]]
 		x = 0
 		y = 0
-		while y < sizeY:
-			map[0].append([])
-			while x < sizeX:
+		while y < height:
+			amap[0].append([])
+			while x < width:
 				cell = Cell(0, x, y)
-				if x == 0 or x == sizeX - 1 or y == 0 or y == sizeY - 1 or [x,y] in walls:
+				if not stage[y][x]:
 					cell.type = CT_WALL
-					if [x,y] in walls:
-						cell.hp = randint(1, 6)
+					cell.hp = random.randint(1, 6)
 				else:
 					cell.type = CT_FLOOR
-					if x == 1 and y == 2:
-						cell.toFloor = 1
-						cell.toX = 8
-						cell.toY = 7
-				map[0][y].append(cell)
-				if cell.type == CT_DOOR:
-					self.doors.append(cell)
+				amap[0][y].append(cell)
 				x += 1
 			x = 0
 			y += 1
+		return amap
+		
+			
+		#===============================================================
+		# Старая тестовая версия двухэтажной карты
+		#===============================================================
+		#amap = [[],[]]
+		#sizeX = 10
+		#sizeY = 10
+		#walls = [[2,2],[4,2],[6,2],[8,2],[1,4],[3,4],[5,4],[7,4],[2,6],[4,6],[6,6],[8,6],[1,8],[3,8],[5,8],[7,8]]
+		#x = 0
+		#y = 0
+		#while y < sizeY:
+		#	amap[0].append([])
+		#	while x < sizeX:
+		#		cell = Cell(0, x, y)
+		#		if x == 0 or x == sizeX - 1 or y == 0 or y == sizeY - 1 or [x,y] in walls:
+		#			cell.type = CT_WALL
+		#			if [x,y] in walls:
+		#				cell.hp = randint(1, 6)
+		#		else:
+		#			cell.type = CT_FLOOR
+		#			if x == 1 and y == 2:
+		#				cell.toFloor = 1
+		#				cell.toX = 8
+		#				cell.toY = 7
+		#		amap[0][y].append(cell)
+		#		if cell.type == CT_DOOR:
+		#			self.doors.append(cell)
+		#		x += 1
+		#	x = 0
+		#	y += 1
 		# Проба второго этажа
-		x = 0
-		y = 0
-		sizeX = 10
-		sizeY = 10
-		walls = [[2,1],[4,1],[6,1],[8,1],[1,3],[3,3],[5,3],[7,3],[2,5],[4,5],[6,5],[8,5],[1,7],[3,7],[5,7],[7,7]]
-		while y < sizeY:
-			map[1].append([])
-			while x < sizeX:
-				cell = Cell(1, x, y)
-				if x == 0 or x == sizeX - 1 or y == 0 or y == sizeY - 1 or [x,y] in walls:
-					cell.type = CT_WALL
-					if [x,y] in walls:
-						cell.hp = randint(1, 6)
-				else:
-					cell.type = CT_FLOOR
-					if x == 8 and y == 8:
-						cell.toFloor = 0
-						cell.toX = 1
-						cell.toY = 1
-				map[1][y].append(cell)
-				if cell.type == CT_DOOR:
-					self.doors.append(cell)
-				x += 1
-			x = 0
-			y += 1
-		return map
+		#x = 0
+		#y = 0
+		#sizeX = 10
+		#sizeY = 10
+		#walls = [[2,1],[4,1],[6,1],[8,1],[1,3],[3,3],[5,3],[7,3],[2,5],[4,5],[6,5],[8,5],[1,7],[3,7],[5,7],[7,7]]
+		#while y < sizeY:
+		#	amap[1].append([])
+		#	while x < sizeX:
+		#		cell = Cell(1, x, y)
+		#		if x == 0 or x == sizeX - 1 or y == 0 or y == sizeY - 1 or [x,y] in walls:
+		#			cell.type = CT_WALL
+		#			if [x,y] in walls:
+		#				cell.hp = randint(1, 6)
+		#		else:
+		#			cell.type = CT_FLOOR
+		#			if x == 8 and y == 8:
+		#				cell.toFloor = 0
+		#				cell.toX = 1
+		#				cell.toY = 1
+		#		amap[1][y].append(cell)
+		#		if cell.type == CT_DOOR:
+		#			self.doors.append(cell)
+		#		x += 1
+		#	x = 0
+		#	y += 1
+		#return amap
+		#===============================================================
 
 	def sendChatMessage(self, message):
 		for p in self.units:
@@ -462,10 +617,10 @@ class FightController:
 				p.sChatMessage(message)
 
 	def finishFight(self):
-		time.sleep(2)
 		if self.nextMoveTimer and self.nextMoveTimer.is_alive():
 			self.nextMoveTimer.cancel()
 		self.nextMoveTimer = None
+		time.sleep(2)
 		id = 0
 		for p in self.units:
 			if p:
@@ -474,7 +629,7 @@ class FightController:
 				p.fightController = None
 				self.units[id] = None
 			id += 1
-		self.map = None
+		self.amap = None
 		self.knownArea = None
 		self.moveOrder = None
 		self.units = None
@@ -550,13 +705,13 @@ class FightController:
 		xs = player.fInfo["x"]
 		ys = player.fInfo["y"]
 		# Проверка входных данных
-		if x < 0 or y < 0 or x >= len(self.map[floorId][0]) or y >= len(self.map[floorId]):
+		if x < 0 or y < 0 or x >= len(self.amap[floorId][0]) or y >= len(self.amap[floorId]):
 			return
-		distance = self.calculateWayLength(len(self.map[floorId][0]), len(self.map[floorId]), xs, ys, x, y)
+		distance = self.calculateWayLength(len(self.amap[floorId][0]), len(self.amap[floorId]), xs, ys, x, y)
 		if distance != 1:
 			return
 		# Если не с чем взамодействовать, уходим
-		cell = self.map[floorId][y][x]
+		cell = self.amap[floorId][y][x]
 		# На стенах могут быть ключи
 		if cell.type == CT_WALL:
 			if cell.key < 0:
@@ -578,7 +733,7 @@ class FightController:
 				# Подготовим массив для функции sendOpenedArea
 				result = []
 				# Создаем этажи (пустые массивы этажей будут проигнорированы)
-				for floor in self.map:
+				for floor in self.amap:
 					result.append([])
 				floorId = 0
 				while floorId < len(area):
@@ -607,7 +762,7 @@ class FightController:
 			# Подготовим массив для функции sendOpenedArea
 			result = []
 			# Создаем этажи (пустые массивы этажей будут проигнорированы)
-			for floor in self.map:
+			for floor in self.amap:
 				result.append([])
 			result[floorId] = list(newArea)
 			# Игрокам нужно отправить newArea
@@ -668,7 +823,7 @@ class FightController:
 			return
 		# Проверка на неверные координаты
 		floor = player.fInfo["floor"]
-		if y < 0 or y >= len(self.map[floor]) or x < 0 or x >= len(self.map[floor][y]):
+		if y < 0 or y >= len(self.amap[floor]) or x < 0 or x >= len(self.amap[floor][y]):
 			return
 		# TODO: добавить сюда проверку возможности попадания по этой ячейке
 		# то есть расстояние до нее и не загорожена ли она препятствием.
@@ -706,8 +861,8 @@ class FightController:
 						self.currentUnit -= 1
 					self.moveOrder.remove(unit.fInfo["id"])
 
-		elif self.map[floor][y][x].type == CT_WALL:
-			cell = self.map[floor][y][x]
+		elif self.amap[floor][y][x].type == CT_WALL:
+			cell = self.amap[floor][y][x]
 			if cell.hp > 0:
 				player.params["actPoints"] -= od
 				# Атакуем стену
@@ -732,7 +887,7 @@ class FightController:
 							# Подготовим массив для функции sendOpenedArea
 							result = []
 							# Создаем этажи (пустые массивы этажей будут проигнорированы)
-							for floor in self.map:
+							for floor in self.amap:
 								result.append([])
 							result[floorId] = list(newArea)
 							# Игрокам нужно отправить newArea
@@ -750,7 +905,7 @@ class FightController:
 			m = int(arr[1])
 		damage = 0
 		for i in range(k):
-			damage += randint(1, 6)
+			damage += random.randint(1, 6)
 		damage += m
 		return damage
 
@@ -769,11 +924,11 @@ class FightController:
 			return
 		# Проверка на неверные координаты
 		floor = player.fInfo["floor"]
-		if y < 0 or y >= len(self.map[floor]) or x < 0 or x >= len(self.map[floor][y]):
+		if y < 0 or y >= len(self.amap[floor]) or x < 0 or x >= len(self.amap[floor][y]):
 			return
 		px = player.fInfo["x"]
 		py = player.fInfo["y"]
-		if x < 0 or y < 0 or self.map[floor][y][x].type != CT_FLOOR:
+		if x < 0 or y < 0 or self.amap[floor][y][x].type != CT_FLOOR:
 			return
 		path = self.aStar(floor, px, py, x, y, [])
 		if player.params["actPoints"] < len(path) / 2:
@@ -798,7 +953,7 @@ class FightController:
 				# Подготовим массив для функции sendOpenedArea
 				result = []
 				# Создаем этажи (пустые массивы этажей будут проигнорированы)
-				for floor in self.map:
+				for floor in self.amap:
 					result.append([])
 				result[floorId] = list(newArea)
 				# Игрокам нужно отправить newArea
@@ -823,22 +978,22 @@ class FightController:
 	def aStar(self, floorId, x, y, tox, toy, impassible):
 		# Для алгоритма aStar важно только то, является ли ячейка проходимой или нет.
 		# 1 - проходима, 0 - непроходима
-		map = []
-		for row in range(len(self.map[floorId])):
-			map.append([])
-			for col in range(len(self.map[floorId][row])):
-				if (self.map[floorId][row][col].type == CT_FLOOR):
-					map[row].append(1)
+		amap = []
+		for row in range(len(self.amap[floorId])):
+			amap.append([])
+			for col in range(len(self.amap[floorId][row])):
+				if (self.amap[floorId][row][col].type == CT_FLOOR):
+					amap[row].append(1)
 				else:
-					map[row].append(0)
+					amap[row].append(0)
 
 		# Размеры этажа
-		sizeX = len(map[0])
-		sizeY = len(map)
+		sizeX = len(amap[0])
+		sizeY = len(amap)
 		# Add impassible cells. Дополнительные непроходимые ячейки, образованные
 		# юнитами, передаются в массиве impassible. (x, y, x, y, ...)
 		for i in range(len(impassible) / 2):
-			map[impassible[i*2 + 1]][impassible[i*2]] = 0
+			amap[impassible[i*2 + 1]][impassible[i*2]] = 0
 		# Creates open and close lists
 		open = []
 		close = []
@@ -860,7 +1015,7 @@ class FightController:
 			# ac = added сell - добавляемая ячейка
 			acIndex = 0
 			# To left
-			if cc.x - 1 >= 0 and map[cc.y][cc.x - 1] != 0 and self.exist(cc.x - 1, cc.y, close) < 0:
+			if cc.x - 1 >= 0 and amap[cc.y][cc.x - 1] != 0 and self.exist(cc.x - 1, cc.y, close) < 0:
 				acIndex = self.exist(cc.x - 1, cc.y, open)
 				if acIndex < 0:
 					ac = aStarCell(cc.x - 1, cc.y, cc.x, cc.y)
@@ -876,7 +1031,7 @@ class FightController:
 						ac.g = cc.g + 10
 						ac.f = ac.g + ac.h
 			# To right
-			if cc.x + 1 < sizeX and map[cc.y][cc.x + 1] != 0 and self.exist(cc.x + 1, cc.y, close) < 0:
+			if cc.x + 1 < sizeX and amap[cc.y][cc.x + 1] != 0 and self.exist(cc.x + 1, cc.y, close) < 0:
 				acIndex = self.exist(cc.x + 1, cc.y, open)
 				if acIndex < 0:
 					ac = aStarCell(cc.x + 1, cc.y, cc.x, cc.y)
@@ -894,7 +1049,7 @@ class FightController:
 			# To up-left
 			# Здесь нужно уточнить координату X, т.к. она зависит от координаты Y.
 			newX = cc.x if cc.y % 2 else cc.x - 1
-			if cc.y - 1 >= 0 and newX < len(map[cc.y - 1]) and newX >= 0 and map[cc.y - 1][newX] != 0 and self.exist(newX, cc.y - 1, close) < 0:
+			if cc.y - 1 >= 0 and newX < len(amap[cc.y - 1]) and newX >= 0 and amap[cc.y - 1][newX] != 0 and self.exist(newX, cc.y - 1, close) < 0:
 				acIndex = self.exist(newX, cc.y - 1, open)
 				if acIndex < 0:
 					ac = aStarCell(newX, cc.y - 1, cc.x, cc.y)
@@ -911,7 +1066,7 @@ class FightController:
 						ac.f = ac.g + ac.h
 			# To up-right
 			newX = cc.x + 1 if cc.y % 2 else cc.x
-			if cc.y - 1 >= 0 and newX < len(map[cc.y - 1]) and newX >= 0 and map[cc.y - 1][newX] != 0 and self.exist(newX, cc.y - 1, close) < 0:
+			if cc.y - 1 >= 0 and newX < len(amap[cc.y - 1]) and newX >= 0 and amap[cc.y - 1][newX] != 0 and self.exist(newX, cc.y - 1, close) < 0:
 				acIndex = self.exist(newX, cc.y - 1, open)
 				if acIndex < 0:
 					ac = aStarCell(newX, cc.y - 1, cc.x, cc.y)
@@ -928,7 +1083,7 @@ class FightController:
 						ac.f = ac.g + ac.h
 			# To down-left
 			newX = cc.x if cc.y % 2 else cc.x - 1
-			if cc.y + 1 < sizeY and newX < len(map[cc.y + 1]) and newX >= 0 and map[cc.y + 1][newX] != 0 and self.exist(newX, cc.y + 1, close) < 0:
+			if cc.y + 1 < sizeY and newX < len(amap[cc.y + 1]) and newX >= 0 and amap[cc.y + 1][newX] != 0 and self.exist(newX, cc.y + 1, close) < 0:
 				acIndex = self.exist(newX, cc.y + 1, open)
 				if acIndex < 0:
 					ac = aStarCell(newX, cc.y + 1, cc.x, cc.y)
@@ -945,7 +1100,7 @@ class FightController:
 						ac.f = ac.g + ac.h
 			# To down-right
 			newX = cc.x + 1 if cc.y % 2 else cc.x
-			if cc.y + 1 < sizeY and newX < len(map[cc.y + 1]) and newX >= 0 and map[cc.y + 1][newX] != 0 and self.exist(newX, cc.y + 1, close) < 0:
+			if cc.y + 1 < sizeY and newX < len(amap[cc.y + 1]) and newX >= 0 and amap[cc.y + 1][newX] != 0 and self.exist(newX, cc.y + 1, close) < 0:
 				acIndex = self.exist(newX, cc.y + 1, open)
 				if acIndex < 0:
 					ac = aStarCell(newX, cc.y + 1, cc.x, cc.y)
@@ -1009,9 +1164,9 @@ class FightController:
 	# Если флаг checkObstacles установлен, будет проведена дополнительная проверка
 	# на загораживание ячеек препятствиями.
 	def getCellsInRadius(self, floorId, xc, yc, r1, r2, includeCenter = False, checkObstacles = False):
-		width = len(self.map[floorId][0])
-		height = len(self.map[floorId])
-		cells = self.map[floorId]
+		width = len(self.amap[floorId][0])
+		height = len(self.amap[floorId])
+		cells = self.amap[floorId]
 		# Проверка на неверные данные
 		if width <= 0 or height <= 0 or not cells or yc < 0 or yc >= height or xc < 0 or xc >= width or r1 < 0 or r2 < 0 or (r1 >= r2 and r2 > 0):
 			return []

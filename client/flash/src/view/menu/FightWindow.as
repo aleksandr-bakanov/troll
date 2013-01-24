@@ -521,6 +521,7 @@ package view.menu
 						floor[info.y] = [];
 					// Не забыть про type.
 					var cell:Cell_asset = new Cell_asset();
+					cell.textField.text = String(info.x + ";" + info.y);
 					cell.addEventListener(MouseEvent.CLICK, cellClickHandler);
 					cell.info = info;
 					var s:Shape, g:Graphics;
